@@ -111,7 +111,7 @@
   .result-count { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 0.6rem; }
 
   .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 1080px; font-size: 0.86rem; }
+  table { border-collapse: collapse; width: 100%; min-width: 1180px; font-size: 0.86rem; }
   thead th { text-align: left; padding: 0.7rem 0.8rem; background: var(--neutral-bg); color: var(--text-muted); font-weight: 600; font-size: 0.74rem; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; }
   thead th.sortable { cursor: pointer; }
   thead th.sortable:hover { color: var(--text); }
@@ -261,6 +261,7 @@
             <th class="sortable" data-key="designation">Designation</th>
             <th class="sortable" data-key="startDate">Start date</th>
             <th class="sortable" data-key="endDate">End date</th>
+            <th>Period</th>
             <th class="sortable sorted" data-key="daysRemaining" data-dir="&uarr;">Days remaining</th>
             <th class="sortable" data-key="status">Status</th>
             <th>Employment</th>
@@ -312,10 +313,23 @@
           <input type="date" id="f_startDate" required>
         </div>
         <div class="field">
-          <label for="f_endDate">End date</label>
-          <input type="date" id="f_endDate" required>
+          <label for="f_period">Contract period</label>
+          <select id="f_period">
+            <option value="">No end date yet</option>
+            <option value="1">1 month</option>
+            <option value="3">3 months</option>
+            <option value="6">6 months</option>
+            <option value="12">12 months</option>
+            <option value="24">24 months</option>
+            <option value="custom">Custom end date&hellip;</option>
+          </select>
         </div>
       </div>
+      <div class="field" id="f_endDateWrap" style="display:none;">
+        <label for="f_endDate">End date</label>
+        <input type="date" id="f_endDate">
+      </div>
+      <p class="field-note" id="periodPreview"></p>
       <p class="field-note">If this employee had resigned, adding a new contract marks them employed again.</p>
       <div class="modal-actions">
         <button type="button" class="btn secondary" id="contractCancelBtn">Cancel</button>
@@ -579,6 +593,8 @@
         var designation = colIndex.designation != null ? row[colIndex.designation] : null;
         var startDate = colIndex.startDate != null ? excelDateToJS(row[colIndex.startDate]) : null;
         var endDate = colIndex.endDate != null ? excelDateToJS(row[colIndex.endDate]) : null;
+        var durationRaw = colIndex.durationMonths != null ? row[colIndex.durationMonths] : null;
+        var durationMonths = (durationRaw != null && durationRaw !== "" && !isNaN(Number(durationRaw))) ? Number(durationRaw) : null;
 
         var key = makeId(payrollNo, name);
         var entry = {
@@ -587,7 +603,8 @@
           department: department != null ? String(department).trim() : "",
           designation: designation != null ? String(designation).trim() : "",
           startDate: startDate ? startDate.toISOString() : null,
-          endDate: endDate ? endDate.toISOString() : null
+          endDate: endDate ? endDate.toISOString() : null,
+          durationMonths: durationMonths
         };
 
         if (!(key in byKey)) order.push(key);
@@ -644,7 +661,13 @@
 
     var dup = emp.contracts.some(function (c) { return sameContract(c, entry); });
     if (!dup) {
-      emp.contracts.push({ startDate: entry.startDate || null, endDate: entry.endDate || null, source: source, addedAt: now });
+      emp.contracts.push({
+        startDate: entry.startDate || null,
+        endDate: entry.endDate || null,
+        durationMonths: (entry.durationMonths != null && !isNaN(entry.durationMonths)) ? entry.durationMonths : null,
+        source: source,
+        addedAt: now
+      });
       added = true;
     }
 
@@ -689,6 +712,31 @@
     return Math.round((end.getTime() - todayStart.getTime()) / 86400000);
   }
 
+  function addMonths(date, n) {
+    var d = new Date(date.getTime());
+    var day = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + n);
+    var lastDayOfTarget = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, lastDayOfTarget));
+    return d;
+  }
+
+  function periodLabel(contract) {
+    if (!contract) return "\u2014";
+    if (contract.durationMonths != null && !isNaN(contract.durationMonths)) {
+      var n = contract.durationMonths;
+      return n + " month" + (n === 1 ? "" : "s");
+    }
+    if (contract.startDate && contract.endDate) {
+      var days = Math.round((new Date(contract.endDate).getTime() - new Date(contract.startDate).getTime()) / 86400000);
+      if (days < 28) return days + " day" + (days === 1 ? "" : "s");
+      var months = Math.round(days / 30.4368);
+      return "~" + months + " month" + (months === 1 ? "" : "s");
+    }
+    return "\u2014";
+  }
+
   function deriveRow(emp) {
     var current = getCurrentContract(emp);
     return {
@@ -700,6 +748,7 @@
       active: emp.active,
       startDate: current ? current.startDate : null,
       endDate: current ? current.endDate : null,
+      period: periodLabel(current),
       daysRemaining: daysForContract(current),
       status: statusForContract(current),
       contractCount: emp.contracts ? emp.contracts.length : 0
@@ -792,7 +841,7 @@
     resultCount.textContent = filtered.length + " of " + (state.showResigned ? all.length : activeOnly.length) + " employee" + (activeOnly.length === 1 ? "" : "s") + " shown";
 
     if (!filtered.length) {
-      tableBody.innerHTML = '<tr class="empty-row"><td colspan="10">No employees match these filters.</td></tr>';
+      tableBody.innerHTML = '<tr class="empty-row"><td colspan="11">No employees match these filters.</td></tr>';
     } else {
       tableBody.innerHTML = filtered.map(function (r) {
         return '<tr class="' + (r.active ? "" : "resigned-row") + '" data-id="' + escapeHtml(r.id) + '">' +
@@ -802,6 +851,7 @@
           "<td>" + escapeHtml(r.designation || "\u2014") + "</td>" +
           '<td class="date">' + fmtDate(r.startDate) + "</td>" +
           '<td class="date">' + fmtDate(r.endDate) + "</td>" +
+          '<td class="dept">' + escapeHtml(r.period) + "</td>" +
           '<td class="days">' + daysLabel(r) + "</td>" +
           '<td><span class="pill ' + r.status + '">' + statusLabel(r.status) + "</span></td>" +
           '<td><span class="pill ' + (r.active ? "employed" : "resigned") + '">' + (r.active ? "Employed" : "Resigned") + "</span></td>" +
@@ -953,11 +1003,33 @@
   var f_department = document.getElementById("f_department");
   var f_designation = document.getElementById("f_designation");
   var f_startDate = document.getElementById("f_startDate");
+  var f_period = document.getElementById("f_period");
+  var f_endDateWrap = document.getElementById("f_endDateWrap");
   var f_endDate = document.getElementById("f_endDate");
+  var periodPreview = document.getElementById("periodPreview");
+
+  function updatePeriodPreview() {
+    var val = f_period.value;
+    if (val === "custom") {
+      f_endDateWrap.style.display = "block";
+      periodPreview.textContent = "";
+      return;
+    }
+    f_endDateWrap.style.display = "none";
+    if (!val) { periodPreview.textContent = "No end date will be set \u2014 this shows as pending until you add one."; return; }
+    if (!f_startDate.value) { periodPreview.textContent = "Pick a start date to see the calculated end date."; return; }
+    var start = new Date(f_startDate.value + "T00:00:00");
+    var end = addMonths(start, parseInt(val, 10));
+    periodPreview.textContent = "Ends " + end.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+  f_period.addEventListener("change", updatePeriodPreview);
+  f_startDate.addEventListener("change", updatePeriodPreview);
 
   function openContractModal(emp) {
     contractFormError.style.display = "none";
     contractForm.reset();
+    f_endDateWrap.style.display = "none";
+    periodPreview.textContent = "";
     if (emp) {
       document.getElementById("contractModalTitle").textContent = "Renew contract";
       document.getElementById("contractModalSub").textContent = "Adding this for " + emp.name + " creates a new contract period in their history.";
@@ -982,15 +1054,33 @@
   contractForm.addEventListener("submit", function (e) {
     e.preventDefault();
     var name = f_name.value.trim();
-    var startDate = f_startDate.value ? new Date(f_startDate.value + "T00:00:00").toISOString() : null;
-    var endDate = f_endDate.value ? new Date(f_endDate.value + "T00:00:00").toISOString() : null;
-
     if (!name) { contractFormError.textContent = "Employee name is required."; contractFormError.style.display = "block"; return; }
-    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
-      contractFormError.textContent = "End date can't be before the start date.";
-      contractFormError.style.display = "block";
-      return;
+    if (!f_startDate.value) { contractFormError.textContent = "Start date is required."; contractFormError.style.display = "block"; return; }
+
+    var start = new Date(f_startDate.value + "T00:00:00");
+    var startDate = start.toISOString();
+    var periodVal = f_period.value;
+    var endDate = null;
+    var durationMonths = null;
+
+    if (periodVal === "custom") {
+      if (!f_endDate.value) {
+        contractFormError.textContent = "Pick an end date, or choose a preset period instead.";
+        contractFormError.style.display = "block";
+        return;
+      }
+      var end = new Date(f_endDate.value + "T00:00:00");
+      if (end < start) {
+        contractFormError.textContent = "End date can't be before the start date.";
+        contractFormError.style.display = "block";
+        return;
+      }
+      endDate = end.toISOString();
+    } else if (periodVal) {
+      durationMonths = parseInt(periodVal, 10);
+      endDate = addMonths(start, durationMonths).toISOString();
     }
+    // else: no period chosen and no custom date — contract has no end date yet (pending)
 
     var entry = {
       payrollNo: f_payrollNo.value.trim(),
@@ -998,7 +1088,8 @@
       department: f_department.value.trim(),
       designation: f_designation.value.trim(),
       startDate: startDate,
-      endDate: endDate
+      endDate: endDate,
+      durationMonths: durationMonths
     };
     upsertContract(entry, "manual");
     saveState();
@@ -1033,7 +1124,7 @@
         return "<li>" +
           "<div>" +
             '<div class="hrange">' + fmtDate(c.startDate) + " &rarr; " + fmtDate(c.endDate) + "</div>" +
-            '<div class="hsource">' + (c.source === "manual" ? "Added manually" : "From import") + (c.addedAt ? " \u00b7 " + fmtDate(c.addedAt) : "") + "</div>" +
+            '<div class="hsource">' + escapeHtml(periodLabel(c)) + " \u00b7 " + (c.source === "manual" ? "Added manually" : "From import") + (c.addedAt ? " \u00b7 " + fmtDate(c.addedAt) : "") + "</div>" +
           "</div>" +
           '<div class="htag">' +
             (isCurrent ? '<span class="current-tag">Current</span>' : "") +
