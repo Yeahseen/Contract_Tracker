@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contract Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --ink: #16233F;
+    --ink-soft: #2B3A5C;
+    --paper: #F7F7F5;
+    --surface: #FFFFFF;
+    --text: #1D2433;
+    --text-muted: #667085;
+    --border: #E2E4E8;
+    --danger: #B3261E;
+    --danger-bg: #FBEAE8;
+    --warning: #B5650B;
+    --warning-bg: #FBF0DF;
+    --success: #276749;
+    --success-bg: #E8F3ED;
+    --neutral-bg: #EEF0F3;
+    --focus: #2B3A5C;
+    --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ink: #0E1730; --ink-soft: #1C2A4A; --paper: #10131C; --surface: #171B27;
+      --text: #E7E9EE; --text-muted: #9AA3B2; --border: #2B303E;
+      --danger: #E5695F; --danger-bg: #3A1E1D; --warning: #E0A340; --warning-bg: #3B2E14;
+      --success: #6FBE96; --success-bg: #1B3327; --neutral-bg: #1E2230;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #0E1730; --ink-soft: #1C2A4A; --paper: #10131C; --surface: #171B27;
+    --text: #E7E9EE; --text-muted: #9AA3B2; --border: #2B303E;
+    --danger: #E5695F; --danger-bg: #3A1E1D; --warning: #E0A340; --warning-bg: #3B2E14;
+    --success: #6FBE96; --success-bg: #1B3327; --neutral-bg: #1E2230;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--text); font-family: var(--font-ui); }
+  body { min-height: 100vh; padding-bottom: 3rem; }
+  a { color: inherit; }
+  .wrap { max-width: 1220px; margin: 0 auto; padding: 0 1.5rem; }
+
+  header.top { background: var(--ink); color: #F2F3F6; padding: 2.4rem 0 2rem; }
+  header.top .wrap { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap; }
+  h1 { font-family: var(--font-display); font-weight: 600; font-size: 2.1rem; letter-spacing: -0.01em; margin: 0 0 0.35rem; }
+  header.top p { margin: 0; color: #B7BFD6; font-size: 0.95rem; max-width: 34rem; line-height: 1.5; }
+  .as-of { text-align: right; font-family: var(--font-mono); font-size: 0.8rem; color: #9DA8C6; }
+  .as-of strong { display: block; color: #F2F3F6; font-size: 0.95rem; font-family: var(--font-ui); font-weight: 600; margin-top: 0.15rem; }
+  .as-of #syncStatus { display: block; font-size: 0.74rem; margin-top: 0.3rem; color: #9DA8C6; }
+  .as-of #syncStatus.synced { color: #8FD9B0; }
+  .as-of #syncStatus.offline { color: #E0A340; }
+
+  main { margin-top: -1.5rem; }
+
+  /* Dropzone */
+  #dropzone { display: none; }
+  .dropzone { margin-top: 2rem; background: var(--surface); border: 1.5px dashed var(--border); border-radius: 4px; padding: 3.5rem 2rem; text-align: center; transition: border-color 0.15s ease, background 0.15s ease; }
+  .dropzone.drag-over { border-color: var(--ink-soft); background: var(--neutral-bg); }
+  .dropzone h2 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 500; margin: 0 0 0.5rem; }
+  .dropzone p { color: var(--text-muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
+  .dropzone .actions-row { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+
+  .btn { display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--font-ui); font-weight: 600; font-size: 0.87rem; padding: 0.6rem 1.15rem; border-radius: 3px; border: none; cursor: pointer; background: var(--ink); color: #fff; }
+  .btn:hover { background: var(--ink-soft); }
+  .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn.secondary:hover { background: var(--neutral-bg); }
+  .btn.small { font-size: 0.78rem; padding: 0.4rem 0.75rem; }
+  .btn.danger-ghost { background: transparent; color: var(--danger); border: 1px solid var(--danger-bg); }
+  .btn.danger-ghost:hover { background: var(--danger-bg); }
+
+  input[type="file"] { display: none; }
+  .file-error { margin-top: 1rem; color: var(--danger); font-size: 0.88rem; display: none; }
+
+  /* Data view */
+  #dataView { display: none; margin-top: 1.75rem; }
+  .meta-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-muted); }
+  .meta-row .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; margin-bottom: 1.1rem; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1rem 1.1rem; cursor: pointer; text-align: left; font-family: var(--font-ui); transition: box-shadow 0.12s ease, border-color 0.12s ease; }
+  .stat:hover { border-color: var(--ink-soft); }
+  .stat.active-filter { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .stat .num { font-family: var(--font-mono); font-size: 1.9rem; font-weight: 600; line-height: 1; display: block; }
+  .stat .label { color: var(--text-muted); font-size: 0.82rem; margin-top: 0.35rem; display: block; }
+  .stat.expired .num { color: var(--danger); }
+  .stat.critical .num { color: var(--warning); }
+  .stat.active .num { color: var(--success); }
+  .stat.pending .num { color: var(--text-muted); }
+
+  .sub-note { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1.1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .sub-note label { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+
+  .toolbar { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .toolbar input[type="search"], .toolbar select { font-family: var(--font-ui); font-size: 0.88rem; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); color: var(--text); }
+  .toolbar input[type="search"] { flex: 1 1 220px; min-width: 180px; }
+  .toolbar select { min-width: 160px; }
+  .toolbar input:focus-visible, .toolbar select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  .result-count { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 0.6rem; }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 1080px; font-size: 0.86rem; }
+  thead th { text-align: left; padding: 0.7rem 0.8rem; background: var(--neutral-bg); color: var(--text-muted); font-weight: 600; font-size: 0.74rem; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; }
+  thead th.sortable { cursor: pointer; }
+  thead th.sortable:hover { color: var(--text); }
+  thead th.sorted::after { content: " " attr(data-dir); font-size: 0.7rem; }
+  tbody td { padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--neutral-bg); }
+  tbody tr.resigned-row { opacity: 0.55; }
+  td.num, td.date { font-family: var(--font-mono); font-size: 0.83rem; }
+  td.days { font-family: var(--font-mono); font-weight: 600; text-align: right; }
+  td.name { font-weight: 500; }
+  td.dept { color: var(--text-muted); }
+  td.actions-cell { white-space: nowrap; }
+
+  .pill { display: inline-block; font-size: 0.73rem; font-weight: 600; padding: 0.22rem 0.6rem; border-radius: 3px; white-space: nowrap; }
+  .pill.expired { background: var(--danger-bg); color: var(--danger); }
+  .pill.critical { background: var(--warning-bg); color: var(--warning); }
+  .pill.active { background: var(--success-bg); color: var(--success); }
+  .pill.pending { background: var(--neutral-bg); color: var(--text-muted); }
+  .pill.employed { background: var(--success-bg); color: var(--success); }
+  .pill.resigned { background: var(--neutral-bg); color: var(--text-muted); }
+
+  .link-btn { background: none; border: none; padding: 0; font-family: var(--font-ui); font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; text-decoration: underline; text-decoration-color: transparent; }
+  .link-btn:hover { text-decoration-color: var(--ink-soft); }
+  .link-btn.warn { color: var(--warning); }
+  .link-btn + .link-btn { margin-left: 0.65rem; }
+
+  .empty-row td { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+
+  footer.hint { max-width: 1220px; margin: 2rem auto 0; padding: 0 1.5rem; color: var(--text-muted); font-size: 0.8rem; line-height: 1.6; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+
+  /* Modals */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 20, 32, 0.55); display: none; align-items: center; justify-content: center; padding: 1.5rem; z-index: 50; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 5px; max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 1.6rem 1.7rem; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  .modal h3 { font-family: var(--font-display); font-size: 1.3rem; font-weight: 500; margin: 0 0 0.3rem; }
+  .modal p.modal-sub { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1.2rem; }
+  .field { margin-bottom: 0.95rem; }
+  .field label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; }
+  .field input, .field select { width: 100%; font-family: var(--font-ui); font-size: 0.9rem; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 3px; background: var(--paper); color: var(--text); }
+  .field input:focus-visible, .field select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .field-row { display: flex; gap: 0.8rem; }
+  .field-row .field { flex: 1; }
+  .field-note { font-size: 0.76rem; color: var(--text-muted); margin-top: 0.3rem; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.3rem; }
+  .form-error { color: var(--danger); font-size: 0.82rem; margin-bottom: 0.9rem; display: none; }
+
+  .history-emp { margin-bottom: 1.1rem; }
+  .history-emp .hname { font-family: var(--font-display); font-size: 1.15rem; font-weight: 500; margin: 0; }
+  .history-emp .hmeta { color: var(--text-muted); font-size: 0.85rem; margin: 0.2rem 0 0; }
+  .history-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+  .history-list li { padding: 0.8rem 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+  .history-list .hrange { font-family: var(--font-mono); font-size: 0.85rem; }
+  .history-list .hsource { font-size: 0.74rem; color: var(--text-muted); margin-top: 0.15rem; }
+  .history-list .htag { display: flex; gap: 0.4rem; align-items: center; }
+  .current-tag { font-size: 0.7rem; font-weight: 700; color: var(--ink-soft); border: 1px solid var(--ink-soft); border-radius: 3px; padding: 0.1rem 0.4rem; }
+
+  @media (max-width: 720px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    header.top { padding: 2rem 0 1.75rem; }
+    .as-of { text-align: left; }
+    .field-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div>
+      <h1>Contract Tracker</h1>
+      <p>Import your contract register, add renewals as they happen, and see exactly how many days each employee has left.</p>
+    </div>
+    <div class="as-of">
+      Today
+      <strong id="todayLabel"></strong>
+      <span id="syncStatus"></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="dropzone" id="loadingState">
+    <h2>Loading&hellip;</h2>
+    <p>Checking for your saved data.</p>
+  </section>
+
+  <section class="dropzone" id="dropzone">
+    <h2>Get started</h2>
+    <p>Import the workbook that lists employee names, start dates, and end dates &mdash; or add your first employee by hand. Days remaining are calculated live against today's date.</p>
+    <div class="actions-row">
+      <button class="btn" id="browseBtn" type="button">Import workbook</button>
+      <button class="btn secondary" id="addFirstBtn" type="button">Add an employee manually</button>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div class="file-error" id="fileError"></div>
+  </section>
+
+  <section id="dataView">
+    <div class="meta-row">
+      <span id="sourceLabel"></span>
+      <div class="actions">
+        <button class="btn secondary small" id="importBtn" type="button">Import workbook</button>
+        <button class="btn small" id="addContractBtn" type="button">Add contract</button>
+      </div>
+    </div>
+
+    <div class="stats" id="stats">
+      <button class="stat expired" data-filter="expired" type="button">
+        <span class="num" id="countExpired">0</span>
+        <span class="label">Expired</span>
+      </button>
+      <button class="stat critical" data-filter="critical" type="button">
+        <span class="num" id="countCritical">0</span>
+        <span class="label">Critical &mdash; under 30 days</span>
+      </button>
+      <button class="stat active" data-filter="active" type="button">
+        <span class="num" id="countActive">0</span>
+        <span class="label">Active</span>
+      </button>
+      <button class="stat pending" data-filter="pending" type="button">
+        <span class="num" id="countPending">0</span>
+        <span class="label">Missing an end date</span>
+      </button>
+    </div>
+
+    <p class="sub-note">
+      <label><input type="checkbox" id="showResignedToggle"> Show resigned employees (<span id="resignedCount">0</span> hidden)</label>
+    </p>
+
+    <div class="toolbar">
+      <input type="search" id="searchInput" placeholder="Search name, department, payroll no.&hellip;">
+      <select id="deptFilter"><option value="">All departments</option></select>
+      <button class="btn secondary" id="clearFiltersBtn" type="button">Clear filters</button>
+    </div>
+
+    <p class="result-count" id="resultCount"></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-key="payrollNo">Payroll No.</th>
+            <th class="sortable" data-key="name">Employee</th>
+            <th class="sortable" data-key="department">Department</th>
+            <th class="sortable" data-key="designation">Designation</th>
+            <th class="sortable" data-key="startDate">Start date</th>
+            <th class="sortable" data-key="endDate">End date</th>
+            <th class="sortable sorted" data-key="daysRemaining" data-dir="&uarr;">Days remaining</th>
+            <th class="sortable" data-key="status">Status</th>
+            <th>Employment</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="hint">
+  <span>Parsing happens in your browser &mdash; the workbook is never uploaded anywhere. Importing again adds new or renewed contracts without erasing what's already here.</span>
+  <button class="link-btn warn" id="clearAllBtn" type="button">Clear all data</button>
+</footer>
+
+<!-- Add / renew contract modal -->
+<div class="modal-backdrop" id="contractModalBackdrop">
+  <div class="modal">
+    <h3 id="contractModalTitle">Add a contract</h3>
+    <p class="modal-sub" id="contractModalSub">Matching an existing payroll number or name adds this as a new contract period for that employee. Otherwise a new employee record is created.</p>
+    <div class="form-error" id="contractFormError"></div>
+    <form id="contractForm">
+      <div class="field-row">
+        <div class="field">
+          <label for="f_payrollNo">Payroll No. (optional)</label>
+          <input type="text" id="f_payrollNo">
+        </div>
+        <div class="field">
+          <label for="f_name">Employee name</label>
+          <input type="text" id="f_name" required>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f_department">Department</label>
+          <input type="text" id="f_department">
+        </div>
+        <div class="field">
+          <label for="f_designation">Designation</label>
+          <input type="text" id="f_designation">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f_startDate">Start date</label>
+          <input type="date" id="f_startDate" required>
+        </div>
+        <div class="field">
+          <label for="f_endDate">End date</label>
+          <input type="date" id="f_endDate" required>
+        </div>
+      </div>
+      <p class="field-note">If this employee had resigned, adding a new contract marks them employed again.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" id="contractCancelBtn">Cancel</button>
+        <button type="submit" class="btn" id="contractSubmitBtn">Add contract</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- History modal -->
+<div class="modal-backdrop" id="historyModalBackdrop">
+  <div class="modal">
+    <div class="history-emp">
+      <p class="hname" id="historyName"></p>
+      <p class="hmeta" id="historyMeta"></p>
+    </div>
+    <ul class="history-list" id="historyList"></ul>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" id="historyCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "contract-tracker:data:v2";
+  var LEGACY_KEY = "contract-tracker:rows:v1";
+
+  // ---------------------------------------------------------------
+  // To make your data show up the same on every device/browser, paste
+  // your Firebase Realtime Database URL below (see the setup guide).
+  // Leave it as "" to keep using this browser's local storage only.
+  //   var FIREBASE_DB_URL = "https://your-project-default-rtdb.firebaseio.com";
+  // ---------------------------------------------------------------
+  var FIREBASE_DB_URL = "https://mmsl-contract-tracker-default-rtdb.asia-southeast1.firebasedatabase.app/";
+
+  var todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  document.getElementById("todayLabel").textContent = todayStart.toLocaleDateString(undefined, {
+    weekday: "short", year: "numeric", month: "short", day: "numeric"
+  });
+
+  var state = {
+    employees: [],
+    lastImport: null,
+    sortKey: "daysRemaining",
+    sortDir: 1,
+    statusFilter: "",
+    deptFilter: "",
+    search: "",
+    showResigned: false
+  };
+
+  var dropzone = document.getElementById("dropzone");
+  var fileInput = document.getElementById("fileInput");
+  var fileError = document.getElementById("fileError");
+  var dataView = document.getElementById("dataView");
+  var tableBody = document.getElementById("tableBody");
+  var resultCount = document.getElementById("resultCount");
+
+  // ---------- persistence ----------
+  //
+  // Every save writes to localStorage immediately (so the app always
+  // works offline) and, if FIREBASE_DB_URL is set, also pushes the
+  // same data to the cloud so every device sees the same records.
+  // On load, the cloud copy wins when it's reachable and non-empty;
+  // otherwise this browser's local copy is used.
+
+  function syncStatus(s) {
+    var el = document.getElementById("syncStatus");
+    if (!el) return;
+    var map = {
+      "not-configured": "Saved in this browser only",
+      "checking": "Checking cloud\u2026",
+      "syncing": "Syncing\u2026",
+      "synced": "Synced to cloud",
+      "offline": "Offline \u2014 saved locally",
+      "local-only": "Saved in this browser only"
+    };
+    el.textContent = map[s] || "";
+    el.className = s === "synced" ? "synced" : (s === "offline" ? "offline" : "");
+  }
+
+  function cloudUrl() {
+    return FIREBASE_DB_URL.replace(/\/$/, "") + "/data.json";
+  }
+
+  function fetchWithTimeout(url, options, ms) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, ms || 8000);
+    var opts = Object.assign({}, options, { signal: controller.signal });
+    return fetch(url, opts).finally(function () { clearTimeout(timer); });
+  }
+
+  function saveLocal() {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        employees: state.employees,
+        lastImport: state.lastImport
+      }));
+    } catch (e) { /* storage unavailable */ }
+  }
+
+  function saveCloud() {
+    if (!FIREBASE_DB_URL) { syncStatus("local-only"); return; }
+    syncStatus("syncing");
+    var payload = JSON.stringify({ employees: state.employees, lastImport: state.lastImport });
+    fetchWithTimeout(cloudUrl(), { method: "PUT", headers: { "Content-Type": "application/json" }, body: payload }, 8000)
+      .then(function (res) { syncStatus(res.ok ? "synced" : "offline"); })
+      .catch(function () { syncStatus("offline"); });
+  }
+
+  function saveState() {
+    saveLocal();
+    saveCloud();
+  }
+
+  function loadLocal() {
+    try {
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.employees) && parsed.employees.length) {
+          state.employees = parsed.employees;
+          state.lastImport = parsed.lastImport || null;
+          return true;
+        }
+        return false;
+      }
+      // migrate legacy v1 flat-row format if present
+      var legacyRaw = window.localStorage.getItem(LEGACY_KEY);
+      if (legacyRaw) {
+        var legacy = JSON.parse(legacyRaw);
+        if (legacy && Array.isArray(legacy.rows) && legacy.rows.length) {
+          state.employees = legacy.rows.map(function (r) {
+            return {
+              id: makeId(r.payrollNo, r.name),
+              payrollNo: r.payrollNo || "",
+              name: r.name,
+              department: r.department || "",
+              designation: r.designation || "",
+              active: true,
+              resignedAt: null,
+              contracts: [{
+                startDate: r.startDate || null,
+                endDate: r.endDate || null,
+                source: "import",
+                addedAt: legacy.importedAt || new Date().toISOString()
+              }]
+            };
+          });
+          state.lastImport = legacy.sourceName ? { fileName: legacy.sourceName, importedAt: legacy.importedAt } : null;
+          saveState(); // seed the cloud (if configured) with the migrated data
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function loadState() {
+    if (!FIREBASE_DB_URL) {
+      syncStatus("not-configured");
+      return Promise.resolve(loadLocal());
+    }
+    syncStatus("checking");
+    return fetchWithTimeout(cloudUrl(), {}, 8000)
+      .then(function (res) { if (!res.ok) throw new Error("bad response"); return res.json(); })
+      .then(function (cloudData) {
+        if (cloudData && Array.isArray(cloudData.employees) && cloudData.employees.length) {
+          state.employees = cloudData.employees;
+          state.lastImport = cloudData.lastImport || null;
+          saveLocal();
+          syncStatus("synced");
+          return true;
+        }
+        // cloud reachable but empty — fall back to local, and if that
+        // has data, push it up so the cloud becomes the shared copy
+        return loadLocal();
+      })
+      .catch(function () {
+        syncStatus("offline");
+        return loadLocal();
+      });
+  }
+
+  function makeId(payrollNo, name) {
+    if (payrollNo != null && String(payrollNo).trim() !== "") return "p:" + String(payrollNo).trim();
+    return "n:" + String(name || "").trim().toLowerCase();
+  }
+
+  // ---------- excel parsing ----------
+
+  function normalizeHeader(h) { return String(h == null ? "" : h).trim().toLowerCase(); }
+
+  var HEADER_MAP = {
+    "payroll no.": "payrollNo", "payroll no": "payrollNo",
+    "employee name": "name", "department": "department", "designation": "designation",
+    "start date": "startDate", "duration (months)": "durationMonths", "end date": "endDate"
+  };
+
+  function excelDateToJS(v) {
+    if (v instanceof Date) return v;
+    if (typeof v === "number") {
+      var parsed = XLSX.SSF.parse_date_code(v);
+      if (!parsed) return null;
+      return new Date(parsed.y, parsed.m - 1, parsed.d);
+    }
+    if (typeof v === "string" && v.trim()) {
+      var d = new Date(v);
+      if (!isNaN(d.getTime())) return d;
+    }
+    return null;
+  }
+
+  function findHeaderRow(sheetRows) {
+    for (var i = 0; i < sheetRows.length; i++) {
+      var row = sheetRows[i] || [];
+      var hasName = false, hasEnd = false;
+      for (var j = 0; j < row.length; j++) {
+        var h = normalizeHeader(row[j]);
+        if (h === "employee name") hasName = true;
+        if (h === "end date") hasEnd = true;
+      }
+      if (hasName && hasEnd) return i;
+    }
+    return -1;
+  }
+
+  function parseWorkbook(wb) {
+    var byKey = {};
+    var order = [];
+
+    wb.SheetNames.forEach(function (sheetName) {
+      var ws = wb.Sheets[sheetName];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+      var headerIdx = findHeaderRow(rows);
+      if (headerIdx === -1) return;
+
+      var headerRow = rows[headerIdx];
+      var colIndex = {};
+      headerRow.forEach(function (h, idx) {
+        var key = HEADER_MAP[normalizeHeader(h)];
+        if (key) colIndex[key] = idx;
+      });
+      if (colIndex.name == null || colIndex.endDate == null) return;
+
+      for (var r = headerIdx + 1; r < rows.length; r++) {
+        var row = rows[r];
+        if (!row) continue;
+        var name = row[colIndex.name];
+        if (name == null || String(name).trim() === "") continue;
+
+        var payrollNo = colIndex.payrollNo != null ? row[colIndex.payrollNo] : null;
+        var department = colIndex.department != null ? row[colIndex.department] : null;
+        var designation = colIndex.designation != null ? row[colIndex.designation] : null;
+        var startDate = colIndex.startDate != null ? excelDateToJS(row[colIndex.startDate]) : null;
+        var endDate = colIndex.endDate != null ? excelDateToJS(row[colIndex.endDate]) : null;
+
+        var key = makeId(payrollNo, name);
+        var entry = {
+          payrollNo: payrollNo != null ? String(payrollNo).trim() : "",
+          name: String(name).trim(),
+          department: department != null ? String(department).trim() : "",
+          designation: designation != null ? String(designation).trim() : "",
+          startDate: startDate ? startDate.toISOString() : null,
+          endDate: endDate ? endDate.toISOString() : null
+        };
+
+        if (!(key in byKey)) order.push(key);
+        byKey[key] = entry;
+      }
+    });
+
+    return order.map(function (k) { return byKey[k]; });
+  }
+
+  // ---------- upsert (import + manual share this) ----------
+
+  function findEmployee(payrollNo, name) {
+    var id = makeId(payrollNo, name);
+    for (var i = 0; i < state.employees.length; i++) {
+      if (state.employees[i].id === id) return state.employees[i];
+    }
+    // fall back: if a payroll number was given but not matched, also try matching by name alone
+    if (payrollNo != null && String(payrollNo).trim() !== "") {
+      var nameId = makeId(null, name);
+      for (var j = 0; j < state.employees.length; j++) {
+        if (state.employees[j].id === nameId) return state.employees[j];
+      }
+    }
+    return null;
+  }
+
+  function sameContract(a, b) {
+    return (a.startDate || null) === (b.startDate || null) && (a.endDate || null) === (b.endDate || null);
+  }
+
+  function upsertContract(entry, source) {
+    var emp = findEmployee(entry.payrollNo, entry.name);
+    var now = new Date().toISOString();
+    var added = false, reactivated = false;
+
+    if (!emp) {
+      emp = {
+        id: makeId(entry.payrollNo, entry.name),
+        payrollNo: entry.payrollNo || "",
+        name: entry.name,
+        department: entry.department || "",
+        designation: entry.designation || "",
+        active: true,
+        resignedAt: null,
+        contracts: []
+      };
+      state.employees.push(emp);
+    }
+
+    if (entry.department) emp.department = entry.department;
+    if (entry.designation) emp.designation = entry.designation;
+    if (entry.payrollNo) emp.payrollNo = entry.payrollNo;
+
+    var dup = emp.contracts.some(function (c) { return sameContract(c, entry); });
+    if (!dup) {
+      emp.contracts.push({ startDate: entry.startDate || null, endDate: entry.endDate || null, source: source, addedAt: now });
+      added = true;
+    }
+
+    if (added && !emp.active) {
+      emp.active = true;
+      emp.resignedAt = null;
+      reactivated = true;
+    }
+
+    return { added: added, reactivated: reactivated };
+  }
+
+  // ---------- derived data ----------
+
+  function getCurrentContract(emp) {
+    if (!emp.contracts || !emp.contracts.length) return null;
+    var sorted = emp.contracts.slice().sort(function (a, b) {
+      var ta = a.startDate ? new Date(a.startDate).getTime() : -Infinity;
+      var tb = b.startDate ? new Date(b.startDate).getTime() : -Infinity;
+      if (tb !== ta) return tb - ta;
+      var aa = a.addedAt ? new Date(a.addedAt).getTime() : 0;
+      var ab = b.addedAt ? new Date(b.addedAt).getTime() : 0;
+      return ab - aa;
+    });
+    return sorted[0];
+  }
+
+  function statusForContract(contract) {
+    if (!contract || !contract.endDate) return "pending";
+    var end = new Date(contract.endDate);
+    end.setHours(0, 0, 0, 0);
+    var days = Math.round((end.getTime() - todayStart.getTime()) / 86400000);
+    if (days < 0) return "expired";
+    if (days <= 30) return "critical";
+    return "active";
+  }
+
+  function daysForContract(contract) {
+    if (!contract || !contract.endDate) return null;
+    var end = new Date(contract.endDate);
+    end.setHours(0, 0, 0, 0);
+    return Math.round((end.getTime() - todayStart.getTime()) / 86400000);
+  }
+
+  function deriveRow(emp) {
+    var current = getCurrentContract(emp);
+    return {
+      id: emp.id,
+      payrollNo: emp.payrollNo,
+      name: emp.name,
+      department: emp.department,
+      designation: emp.designation,
+      active: emp.active,
+      startDate: current ? current.startDate : null,
+      endDate: current ? current.endDate : null,
+      daysRemaining: daysForContract(current),
+      status: statusForContract(current),
+      contractCount: emp.contracts ? emp.contracts.length : 0
+    };
+  }
+
+  // ---------- rendering ----------
+
+  function fmtDate(iso) {
+    if (!iso) return "\u2014";
+    return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function statusLabel(s) { return { expired: "Expired", critical: "Critical", active: "Active", pending: "Pending data" }[s] || s; }
+
+  function daysLabel(row) {
+    if (row.daysRemaining == null) return "\u2014";
+    if (row.daysRemaining < 0) return Math.abs(row.daysRemaining) + "d overdue";
+    if (row.daysRemaining === 0) return "Today";
+    return row.daysRemaining + "d";
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function populateDeptFilter(rows) {
+    var sel = document.getElementById("deptFilter");
+    var current = sel.value;
+    var depts = Array.from(new Set(rows.map(function (r) { return r.department; }).filter(Boolean))).sort();
+    sel.innerHTML = '<option value="">All departments</option>' +
+      depts.map(function (d) { return '<option value="' + escapeHtml(d) + '">' + escapeHtml(d) + "</option>"; }).join("");
+    if (depts.indexOf(current) !== -1) sel.value = current;
+  }
+
+  function getFilteredSorted() {
+    var all = state.employees.map(deriveRow);
+    var visible = state.showResigned ? all : all.filter(function (r) { return r.active; });
+    var q = state.search.trim().toLowerCase();
+
+    var filtered = visible.filter(function (r) {
+      if (state.statusFilter && r.status !== state.statusFilter) return false;
+      if (state.deptFilter && r.department !== state.deptFilter) return false;
+      if (q) {
+        var hay = (r.name + " " + r.department + " " + r.designation + " " + r.payrollNo).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+
+    filtered.sort(function (a, b) {
+      var ka = a[state.sortKey], kb = b[state.sortKey];
+      if (state.sortKey === "daysRemaining") {
+        var va = ka == null ? Infinity : ka, vb = kb == null ? Infinity : kb;
+        return (va - vb) * state.sortDir;
+      }
+      if (state.sortKey === "startDate" || state.sortKey === "endDate") {
+        var da = ka ? new Date(ka).getTime() : -Infinity, db_ = kb ? new Date(kb).getTime() : -Infinity;
+        return (da - db_) * state.sortDir;
+      }
+      var sa = (ka || "").toString().toLowerCase(), sb = (kb || "").toString().toLowerCase();
+      if (sa < sb) return -1 * state.sortDir;
+      if (sa > sb) return 1 * state.sortDir;
+      return 0;
+    });
+
+    return { all: all, activeOnly: all.filter(function (r) { return r.active; }), filtered: filtered };
+  }
+
+  function render() {
+    var res = getFilteredSorted();
+    var activeOnly = res.activeOnly, filtered = res.filtered, all = res.all;
+
+    var counts = { expired: 0, critical: 0, active: 0, pending: 0 };
+    activeOnly.forEach(function (r) { counts[r.status]++; });
+    document.getElementById("countExpired").textContent = counts.expired;
+    document.getElementById("countCritical").textContent = counts.critical;
+    document.getElementById("countActive").textContent = counts.active;
+    document.getElementById("countPending").textContent = counts.pending;
+    document.getElementById("resignedCount").textContent = all.length - activeOnly.length;
+
+    document.querySelectorAll(".stat").forEach(function (btn) {
+      btn.classList.toggle("active-filter", btn.getAttribute("data-filter") === state.statusFilter);
+    });
+
+    populateDeptFilter(state.showResigned ? all : activeOnly);
+
+    resultCount.textContent = filtered.length + " of " + (state.showResigned ? all.length : activeOnly.length) + " employee" + (activeOnly.length === 1 ? "" : "s") + " shown";
+
+    if (!filtered.length) {
+      tableBody.innerHTML = '<tr class="empty-row"><td colspan="10">No employees match these filters.</td></tr>';
+    } else {
+      tableBody.innerHTML = filtered.map(function (r) {
+        return '<tr class="' + (r.active ? "" : "resigned-row") + '" data-id="' + escapeHtml(r.id) + '">' +
+          '<td class="num">' + escapeHtml(r.payrollNo || "\u2014") + "</td>" +
+          '<td class="name">' + escapeHtml(r.name) + "</td>" +
+          '<td class="dept">' + escapeHtml(r.department || "\u2014") + "</td>" +
+          "<td>" + escapeHtml(r.designation || "\u2014") + "</td>" +
+          '<td class="date">' + fmtDate(r.startDate) + "</td>" +
+          '<td class="date">' + fmtDate(r.endDate) + "</td>" +
+          '<td class="days">' + daysLabel(r) + "</td>" +
+          '<td><span class="pill ' + r.status + '">' + statusLabel(r.status) + "</span></td>" +
+          '<td><span class="pill ' + (r.active ? "employed" : "resigned") + '">' + (r.active ? "Employed" : "Resigned") + "</span></td>" +
+          '<td class="actions-cell">' +
+            '<button class="link-btn" data-action="history" data-id="' + escapeHtml(r.id) + '">History (' + r.contractCount + ")</button>" +
+            '<button class="link-btn" data-action="renew" data-id="' + escapeHtml(r.id) + '">Renew</button>' +
+            '<button class="link-btn ' + (r.active ? "warn" : "") + '" data-action="toggle-active" data-id="' + escapeHtml(r.id) + '">' + (r.active ? "Resign" : "Reactivate") + "</button>" +
+          "</td>" +
+        "</tr>";
+      }).join("");
+    }
+
+    document.querySelectorAll("thead th.sortable").forEach(function (th) {
+      var key = th.getAttribute("data-key");
+      th.classList.toggle("sorted", key === state.sortKey);
+      if (key === state.sortKey) th.setAttribute("data-dir", state.sortDir === 1 ? "\u2191" : "\u2193");
+    });
+  }
+
+  function showData() {
+    dropzone.style.display = "none";
+    dataView.style.display = "block";
+    var when = state.lastImport && state.lastImport.importedAt ? new Date(state.lastImport.importedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+    document.getElementById("sourceLabel").textContent = state.lastImport
+      ? "Last import: " + state.lastImport.fileName + (when ? " \u00b7 " + when : "")
+      : "No workbook imported yet \u2014 employees added manually";
+    render();
+  }
+
+  function showDropzone() {
+    dropzone.style.display = "block";
+    dataView.style.display = "none";
+  }
+
+  function refresh() {
+    if (state.employees.length) showData(); else showDropzone();
+  }
+
+  // ---------- file handling ----------
+
+  function handleFile(file) {
+    fileError.style.display = "none";
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var data = new Uint8Array(e.target.result);
+        var wb = XLSX.read(data, { type: "array", cellDates: false });
+        var entries = parseWorkbook(wb);
+        if (!entries.length) {
+          fileError.textContent = "Couldn't find a sheet with \u201cEmployee Name\u201d and \u201cEnd Date\u201d columns. Check the workbook and try again.";
+          fileError.style.display = "block";
+          return;
+        }
+        entries.forEach(function (entry) { upsertContract(entry, "import"); });
+        state.lastImport = { fileName: file.name, importedAt: new Date().toISOString() };
+        saveState();
+        refresh();
+      } catch (err) {
+        fileError.textContent = "Couldn't read that file. Make sure it's a valid .xlsx workbook.";
+        fileError.style.display = "block";
+      }
+    };
+    reader.onerror = function () {
+      fileError.textContent = "Couldn't read that file. Please try again.";
+      fileError.style.display = "block";
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  document.getElementById("browseBtn").addEventListener("click", function () { fileInput.click(); });
+  document.getElementById("importBtn").addEventListener("click", function () { fileInput.click(); });
+  fileInput.addEventListener("change", function () {
+    if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+    fileInput.value = "";
+  });
+
+  ["dragenter", "dragover"].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) { e.preventDefault(); dropzone.classList.add("drag-over"); });
+  });
+  ["dragleave", "drop"].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) { e.preventDefault(); dropzone.classList.remove("drag-over"); });
+  });
+  dropzone.addEventListener("drop", function (e) {
+    var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  // ---------- filter / sort controls ----------
+
+  document.getElementById("searchInput").addEventListener("input", function (e) { state.search = e.target.value; render(); });
+  document.getElementById("deptFilter").addEventListener("change", function (e) { state.deptFilter = e.target.value; render(); });
+  document.getElementById("showResignedToggle").addEventListener("change", function (e) { state.showResigned = e.target.checked; render(); });
+  document.getElementById("clearFiltersBtn").addEventListener("click", function () {
+    state.search = ""; state.deptFilter = ""; state.statusFilter = "";
+    document.getElementById("searchInput").value = "";
+    render();
+  });
+  document.querySelectorAll(".stat").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var f = btn.getAttribute("data-filter");
+      state.statusFilter = state.statusFilter === f ? "" : f;
+      render();
+    });
+  });
+  document.querySelectorAll("thead th.sortable").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var key = th.getAttribute("data-key");
+      if (state.sortKey === key) state.sortDir *= -1; else { state.sortKey = key; state.sortDir = 1; }
+      render();
+    });
+  });
+
+  document.getElementById("clearAllBtn").addEventListener("click", function () {
+    if (!window.confirm("Clear all employees and contract history? This can't be undone.")) return;
+    state.employees = [];
+    state.lastImport = null;
+    saveState();
+    refresh();
+  });
+
+  // ---------- row actions ----------
+
+  tableBody.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    var id = btn.getAttribute("data-id");
+    var emp = state.employees.find(function (x) { return x.id === id; });
+    if (!emp) return;
+
+    if (btn.getAttribute("data-action") === "toggle-active") {
+      emp.active = !emp.active;
+      emp.resignedAt = emp.active ? null : new Date().toISOString();
+      saveState();
+      render();
+    } else if (btn.getAttribute("data-action") === "history") {
+      openHistory(emp);
+    } else if (btn.getAttribute("data-action") === "renew") {
+      openContractModal(emp);
+    }
+  });
+
+  // ---------- add / renew contract modal ----------
+
+  var contractBackdrop = document.getElementById("contractModalBackdrop");
+  var contractForm = document.getElementById("contractForm");
+  var contractFormError = document.getElementById("contractFormError");
+  var f_payrollNo = document.getElementById("f_payrollNo");
+  var f_name = document.getElementById("f_name");
+  var f_department = document.getElementById("f_department");
+  var f_designation = document.getElementById("f_designation");
+  var f_startDate = document.getElementById("f_startDate");
+  var f_endDate = document.getElementById("f_endDate");
+
+  function openContractModal(emp) {
+    contractFormError.style.display = "none";
+    contractForm.reset();
+    if (emp) {
+      document.getElementById("contractModalTitle").textContent = "Renew contract";
+      document.getElementById("contractModalSub").textContent = "Adding this for " + emp.name + " creates a new contract period in their history.";
+      f_payrollNo.value = emp.payrollNo || "";
+      f_name.value = emp.name || "";
+      f_department.value = emp.department || "";
+      f_designation.value = emp.designation || "";
+    } else {
+      document.getElementById("contractModalTitle").textContent = "Add a contract";
+      document.getElementById("contractModalSub").textContent = "Matching an existing payroll number or name adds this as a new contract period for that employee. Otherwise a new employee record is created.";
+    }
+    contractBackdrop.classList.add("open");
+    f_name.focus();
+  }
+  function closeContractModal() { contractBackdrop.classList.remove("open"); }
+
+  document.getElementById("addContractBtn").addEventListener("click", function () { openContractModal(null); });
+  document.getElementById("addFirstBtn").addEventListener("click", function () { openContractModal(null); });
+  document.getElementById("contractCancelBtn").addEventListener("click", closeContractModal);
+  contractBackdrop.addEventListener("click", function (e) { if (e.target === contractBackdrop) closeContractModal(); });
+
+  contractForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = f_name.value.trim();
+    var startDate = f_startDate.value ? new Date(f_startDate.value + "T00:00:00").toISOString() : null;
+    var endDate = f_endDate.value ? new Date(f_endDate.value + "T00:00:00").toISOString() : null;
+
+    if (!name) { contractFormError.textContent = "Employee name is required."; contractFormError.style.display = "block"; return; }
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      contractFormError.textContent = "End date can't be before the start date.";
+      contractFormError.style.display = "block";
+      return;
+    }
+
+    var entry = {
+      payrollNo: f_payrollNo.value.trim(),
+      name: name,
+      department: f_department.value.trim(),
+      designation: f_designation.value.trim(),
+      startDate: startDate,
+      endDate: endDate
+    };
+    upsertContract(entry, "manual");
+    saveState();
+    closeContractModal();
+    refresh();
+  });
+
+  // ---------- history modal ----------
+
+  var historyBackdrop = document.getElementById("historyModalBackdrop");
+  var historyList = document.getElementById("historyList");
+
+  function openHistory(emp) {
+    document.getElementById("historyName").textContent = emp.name;
+    document.getElementById("historyMeta").textContent =
+      [emp.payrollNo ? "Payroll No. " + emp.payrollNo : null, emp.department, emp.designation].filter(Boolean).join(" \u00b7 ") +
+      (emp.active ? "" : " \u00b7 Resigned" + (emp.resignedAt ? " " + fmtDate(emp.resignedAt) : ""));
+
+    var current = getCurrentContract(emp);
+    var sorted = (emp.contracts || []).slice().sort(function (a, b) {
+      var ta = a.startDate ? new Date(a.startDate).getTime() : -Infinity;
+      var tb = b.startDate ? new Date(b.startDate).getTime() : -Infinity;
+      return tb - ta;
+    });
+
+    if (!sorted.length) {
+      historyList.innerHTML = '<li>No contract periods on file.</li>';
+    } else {
+      historyList.innerHTML = sorted.map(function (c) {
+        var status = statusForContract(c);
+        var isCurrent = current && c === current;
+        return "<li>" +
+          "<div>" +
+            '<div class="hrange">' + fmtDate(c.startDate) + " &rarr; " + fmtDate(c.endDate) + "</div>" +
+            '<div class="hsource">' + (c.source === "manual" ? "Added manually" : "From import") + (c.addedAt ? " \u00b7 " + fmtDate(c.addedAt) : "") + "</div>" +
+          "</div>" +
+          '<div class="htag">' +
+            (isCurrent ? '<span class="current-tag">Current</span>' : "") +
+            '<span class="pill ' + status + '">' + statusLabel(status) + "</span>" +
+          "</div>" +
+        "</li>";
+      }).join("");
+    }
+    historyBackdrop.classList.add("open");
+  }
+
+  document.getElementById("historyCloseBtn").addEventListener("click", function () { historyBackdrop.classList.remove("open"); });
+  historyBackdrop.addEventListener("click", function (e) { if (e.target === historyBackdrop) historyBackdrop.classList.remove("open"); });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      contractBackdrop.classList.remove("open");
+      historyBackdrop.classList.remove("open");
+    }
+  });
+
+  // ---------- init ----------
+
+  loadState().then(function () {
+    document.getElementById("loadingState").style.display = "none";
+    refresh();
+  });
+})();
+</script>
+
+</body>
+</html>
