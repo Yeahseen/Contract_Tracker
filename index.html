@@ -118,7 +118,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   .error-banner button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 3px; padding: 0.3rem 0.7rem; cursor: pointer; font-size: 0.8rem; }
 
   input[type="file"] { display: none; }
-  .file-error { margin-top: 1rem; color: var(--danger); font-size: 0.88rem; display: none; }
+  .file-error { margin-top: 1rem; color: var(--danger); font-size: 0.88rem; display: none; text-align: left; white-space: pre-line; }
+  .file-warning { margin-top: 1rem; color: var(--warning); font-size: 0.88rem; display: none; text-align: left; white-space: pre-line; }
 
   /* Data view */
   #dataView { display: none; margin-top: 1.75rem; }
@@ -212,6 +213,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     .as-of { text-align: left; }
     .field-row { flex-direction: column; }
   }
+
+  #printArea { display: none; }
+  #printArea h1 { font-family: var(--font-display); font-size: 18pt; margin: 0 0 2pt; }
+  #printArea h2 { font-family: var(--font-ui); font-size: 11pt; font-weight: 500; color: #555; margin: 0 0 18pt; }
+  #printArea table { border-collapse: collapse; width: 100%; font-size: 10pt; }
+  #printArea th, #printArea td { border: 1px solid #999; padding: 6pt 8pt; text-align: left; }
+  #printArea th { background: #16233F; color: #fff; }
+  #printArea .print-footer { font-size: 9pt; color: #777; margin-top: 20pt; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #printArea, #printArea * { visibility: visible; }
+    #printArea { display: block; position: absolute; top: 0; left: 0; width: 100%; padding: 0.6in; }
+  }
 </style>
 </head>
 <body>
@@ -258,6 +273,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     <p>Checking for your saved data.</p>
   </section>
 
+  <div class="file-error" id="fileError"></div>
+  <div class="file-warning" id="fileWarning"></div>
+
   <section class="dropzone" id="dropzone">
     <h2>Get started</h2>
     <p class="admin-only">Import the workbook that lists employee names, start dates, and end dates &mdash; or add your first employee by hand. Days remaining are calculated live against today's date.</p>
@@ -267,7 +285,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       <button class="btn secondary" id="addFirstBtn" type="button">Add an employee manually</button>
     </div>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
-    <div class="file-error" id="fileError"></div>
   </section>
 
   <section id="dataView">
@@ -411,9 +428,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     <ul class="history-list" id="historyList"></ul>
     <div class="modal-actions">
       <button type="button" class="btn secondary" id="historyCloseBtn">Close</button>
+      <button type="button" class="btn" id="historyPrintBtn">Print history</button>
     </div>
   </div>
 </div>
+
+<div id="printArea"></div>
 
 <!-- Resign / terminate modal -->
 <div class="modal-backdrop" id="resignModalBackdrop">
@@ -547,6 +567,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var dropzone = document.getElementById("dropzone");
   var fileInput = document.getElementById("fileInput");
   var fileError = document.getElementById("fileError");
+  var fileWarning = document.getElementById("fileWarning");
   var dataView = document.getElementById("dataView");
   var tableBody = document.getElementById("tableBody");
   var resultCount = document.getElementById("resultCount");
@@ -694,6 +715,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     "start date": "startDate", "duration (months)": "durationMonths", "end date": "endDate"
   };
 
+  // Columns a sheet must have before we'll import rows from it. Duration is
+  // left out since the Period feature can work from start/end dates alone.
+  var MANDATORY_COLUMNS = [
+    { key: "payrollNo", label: "Payroll No." },
+    { key: "name", label: "Employee Name" },
+    { key: "department", label: "Department" },
+    { key: "designation", label: "Designation" },
+    { key: "startDate", label: "Start Date" },
+    { key: "endDate", label: "End Date" }
+  ];
+
   function excelDateToJS(v) {
     if (v instanceof Date) return v;
     if (typeof v === "number") {
@@ -725,12 +757,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function parseWorkbook(wb) {
     var byKey = {};
     var order = [];
+    var warnings = []; // sheets that looked like a contract register but were missing mandatory columns
+    var candidateSheetCount = 0;
 
     wb.SheetNames.forEach(function (sheetName) {
       var ws = wb.Sheets[sheetName];
       var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
       var headerIdx = findHeaderRow(rows);
-      if (headerIdx === -1) return;
+      if (headerIdx === -1) return; // doesn't even look like a contract register — skip silently
+
+      candidateSheetCount++;
 
       var headerRow = rows[headerIdx];
       var colIndex = {};
@@ -738,7 +774,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var key = HEADER_MAP[normalizeHeader(h)];
         if (key) colIndex[key] = idx;
       });
-      if (colIndex.name == null || colIndex.endDate == null) return;
+
+      var missing = MANDATORY_COLUMNS.filter(function (c) { return colIndex[c.key] == null; }).map(function (c) { return c.label; });
+      if (missing.length) {
+        warnings.push({ sheet: sheetName, missing: missing });
+        return; // don't import partial/malformed rows from this sheet
+      }
 
       for (var r = headerIdx + 1; r < rows.length; r++) {
         var row = rows[r];
@@ -770,7 +811,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
     });
 
-    return order.map(function (k) { return byKey[k]; });
+    return {
+      entries: order.map(function (k) { return byKey[k]; }),
+      warnings: warnings,
+      candidateSheetCount: candidateSheetCount
+    };
   }
 
   // ---------- upsert (import + manual share this) ----------
@@ -1055,20 +1100,41 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function handleFile(file) {
     if (!isAdmin()) return;
     fileError.style.display = "none";
+    fileWarning.style.display = "none";
     var reader = new FileReader();
     reader.onload = function (e) {
       try {
         var data = new Uint8Array(e.target.result);
         var wb = XLSX.read(data, { type: "array", cellDates: false });
-        var entries = parseWorkbook(wb);
-        if (!entries.length) {
+        var result = parseWorkbook(wb);
+
+        if (result.candidateSheetCount === 0) {
           fileError.textContent = "Couldn't find a sheet with \u201cEmployee Name\u201d and \u201cEnd Date\u201d columns. Check the workbook and try again.";
           fileError.style.display = "block";
           return;
         }
-        entries.forEach(function (entry) { upsertContract(entry, "import"); });
+
+        if (!result.entries.length) {
+          // every candidate sheet was missing at least one mandatory column
+          var msg = "Found " + result.candidateSheetCount + " sheet" + (result.candidateSheetCount === 1 ? "" : "s") +
+            " that looked like a contract register, but none had all the required columns:\n" +
+            result.warnings.map(function (w) { return "\u2022 \u201c" + w.sheet + "\u201d is missing: " + w.missing.join(", "); }).join("\n") +
+            "\n\nRequired columns: " + MANDATORY_COLUMNS.map(function (c) { return c.label; }).join(", ") + ". Nothing was imported.";
+          fileError.textContent = msg;
+          fileError.style.display = "block";
+          return;
+        }
+
+        result.entries.forEach(function (entry) { upsertContract(entry, "import"); });
         state.lastImport = { fileName: file.name, importedAt: new Date().toISOString() };
         saveState();
+
+        if (result.warnings.length) {
+          fileWarning.textContent = "Imported successfully, but skipped " + result.warnings.length + " sheet" + (result.warnings.length === 1 ? "" : "s") + " missing required columns:\n" +
+            result.warnings.map(function (w) { return "\u2022 \u201c" + w.sheet + "\u201d is missing: " + w.missing.join(", "); }).join("\n");
+          fileWarning.style.display = "block";
+        }
+
         refresh();
       } catch (err) {
         fileError.textContent = "Couldn't read that file. Make sure it's a valid .xlsx workbook.";
@@ -1340,8 +1406,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   var historyBackdrop = document.getElementById("historyModalBackdrop");
   var historyList = document.getElementById("historyList");
+  var historyTargetEmp = null;
 
   function openHistory(emp) {
+    historyTargetEmp = emp;
     document.getElementById("historyName").textContent = emp.name;
     document.getElementById("historyMeta").textContent =
       [emp.payrollNo ? "Payroll No. " + emp.payrollNo : null, emp.department, emp.designation].filter(Boolean).join(" \u00b7 ") +
@@ -1375,6 +1443,42 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     historyBackdrop.classList.add("open");
   }
 
+  function printHistory(emp) {
+    if (!emp) return;
+    var current = getCurrentContract(emp);
+    var sorted = (emp.contracts || []).slice().sort(function (a, b) {
+      var ta = a.startDate ? new Date(a.startDate).getTime() : -Infinity;
+      var tb = b.startDate ? new Date(b.startDate).getTime() : -Infinity;
+      return tb - ta;
+    });
+
+    var metaLine = [emp.payrollNo ? "Payroll No. " + emp.payrollNo : null, emp.department, emp.designation].filter(Boolean).join(" \u00b7 ") +
+      (emp.active ? "" : " \u00b7 Resigned" + (emp.resignedAt ? " " + fmtDate(emp.resignedAt) : "") + (emp.resignReason ? " \u2014 " + emp.resignReason : ""));
+
+    var rowsHtml = sorted.map(function (c) {
+      var status = statusForContract(c);
+      var isCurrent = current && c === current;
+      return "<tr>" +
+        "<td>" + fmtDate(c.startDate) + "</td>" +
+        "<td>" + fmtDate(c.endDate) + "</td>" +
+        "<td>" + escapeHtml(periodLabel(c)) + "</td>" +
+        "<td>" + escapeHtml(statusLabel(status)) + (isCurrent ? " (Current)" : "") + "</td>" +
+        "<td>" + (c.source === "manual" ? "Added manually" : "From import") + "</td>" +
+      "</tr>";
+    }).join("");
+
+    var printArea = document.getElementById("printArea");
+    printArea.innerHTML =
+      "<h1>Majani Mingi Employees Contract Tracker</h1>" +
+      "<h2>Contract history \u2014 " + escapeHtml(emp.name) + "<br>" + escapeHtml(metaLine) + "</h2>" +
+      "<table><thead><tr><th>Start Date</th><th>End Date</th><th>Period</th><th>Status</th><th>Source</th></tr></thead>" +
+      "<tbody>" + (rowsHtml || "<tr><td colspan='5'>No contract periods on file.</td></tr>") + "</tbody></table>" +
+      "<div class='print-footer'>Printed " + new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) + "</div>";
+
+    window.print();
+  }
+
+  document.getElementById("historyPrintBtn").addEventListener("click", function () { printHistory(historyTargetEmp); });
   document.getElementById("historyCloseBtn").addEventListener("click", function () { historyBackdrop.classList.remove("open"); });
   historyBackdrop.addEventListener("click", function (e) { if (e.target === historyBackdrop) historyBackdrop.classList.remove("open"); });
 
