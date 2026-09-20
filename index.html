@@ -1,1159 +1,923 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Contract Tracker</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Majani Mingi - Employee Contract Tracker</title>
+
+<!-- Firebase App & Realtime Database SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+<!-- SheetJS for Excel importing -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- docx library for Word export -->
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<!-- FileSaver for triggering download -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
 <style>
   :root {
-    --ink: #16233F;
-    --ink-soft: #2B3A5C;
-    --paper: #F7F7F5;
-    --surface: #FFFFFF;
-    --text: #1D2433;
-    --text-muted: #667085;
-    --border: #E2E4E8;
-    --danger: #B3261E;
-    --danger-bg: #FBEAE8;
-    --warning: #B5650B;
-    --warning-bg: #FBF0DF;
-    --success: #276749;
-    --success-bg: #E8F3ED;
-    --neutral-bg: #EEF0F3;
-    --focus: #2B3A5C;
-    --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
-    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --card-border: #E2E8F0;
+    --text: #0F172A;
+    --text-muted: #64748B;
+    --primary: #0F766E;
+    --primary-light: #CCFBF1;
+    --primary-hover: #0D6E66;
+    --accent: #0284C7;
+    --link: #0284C7;
+    
+    --status-active-bg: #DCFCE7;
+    --status-active-txt: #15803D;
+    --status-crit-bg: #FEE2E2;
+    --status-crit-txt: #B91C1C;
+    --status-exp-bg: #FEF3C7;
+    --status-exp-txt: #B45309;
+    --status-pend-bg: #F1F5F9;
+    --status-pend-txt: #475569;
+    --status-res-bg: #CBD5E1;
+    --status-res-txt: #334155;
   }
 
-  :root:not([data-theme="light"]) {
-    @media (prefers-color-scheme: dark) {
-      --ink: #0E1730; --ink-soft: #1C2A4A; --paper: #10131C; --surface: #171B27;
-      --text: #E7E9EE; --text-muted: #9AA3B2; --border: #2B303E;
-      --danger: #E5695F; --danger-bg: #3A1E1D; --warning: #E0A340; --warning-bg: #3B2E14;
-      --success: #6FBE96; --success-bg: #1B3327; --neutral-bg: #1E2230;
-    }
+  [data-theme="dark"] {
+    --bg: #0F172A;
+    --card: #1E293B;
+    --card-border: #334155;
+    --text: #F8FAFC;
+    --text-muted: #94A3B8;
+    --primary: #14B8A6;
+    --primary-light: #134E4A;
+    --primary-hover: #2DD4BF;
+    --accent: #38BDF8;
+    --link: #38BDF8;
+
+    --status-active-bg: #064E3B;
+    --status-active-txt: #6EE7B7;
+    --status-crit-bg: #7F1D1D;
+    --status-crit-txt: #FCA5A5;
+    --status-exp-bg: #78350F;
+    --status-exp-txt: #FDE68A;
+    --status-pend-bg: #334155;
+    --status-pend-txt: #CBD5E1;
+    --status-res-bg: #475569;
+    --status-res-txt: #E2E8F0;
   }
-  :root[data-theme="dark"] {
-    --ink: #0E1730; --ink-soft: #1C2A4A; --paper: #10131C; --surface: #171B27;
-    --text: #E7E9EE; --text-muted: #9AA3B2; --border: #2B303E;
-    --danger: #E5695F; --danger-bg: #3A1E1D; --warning: #E0A340; --warning-bg: #3B2E14;
-    --success: #6FBE96; --success-bg: #1B3327; --neutral-bg: #1E2230;
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { background: var(--bg); color: var(--text); padding: 24px; transition: background 0.2s, color 0.2s; min-height: 100vh; }
+
+  /* Auth Overlay */
+  #auth-overlay {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.95);
+    display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;
   }
+  .auth-card {
+    background: var(--card); border: 1px solid var(--card-border);
+    padding: 32px; border-radius: 12px; width: 100%; max-width: 400px; text-align: center;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  }
+  .auth-card h2 { margin-bottom: 8px; color: var(--text); }
+  .auth-card p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px; }
+  .auth-card input {
+    width: 100%; padding: 12px; border: 1px solid var(--card-border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font-size: 1rem; margin-bottom: 16px; text-align: center;
+  }
+  .auth-card button {
+    width: 100%; padding: 12px; background: var(--primary); color: #fff; font-weight: 600;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 1rem;
+  }
+  .auth-card button:hover { background: var(--primary-hover); }
+  .auth-error { color: var(--status-crit-txt); font-size: 0.85rem; margin-top: 12px; display: none; }
 
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--paper); color: var(--text); font-family: var(--font-ui); }
-  body { min-height: 100vh; padding-bottom: 3rem; }
-  a { color: inherit; }
-  .wrap { max-width: 1220px; margin: 0 auto; padding: 0 1.5rem; }
+  .container { max-width: 1280px; margin: 0 auto; }
 
-  header.top { background: var(--ink); color: #F2F3F6; padding: 2.4rem 0 2rem; }
-  header.top .wrap { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap; }
-  h1 { font-family: var(--font-display); font-weight: 600; font-size: 2.1rem; letter-spacing: -0.01em; margin: 0 0 0.35rem; }
-  header.top p { margin: 0; color: #B7BFD6; font-size: 0.95rem; max-width: 34rem; line-height: 1.5; }
-  .as-of { text-align: right; font-family: var(--font-mono); font-size: 0.8rem; color: #9DA8C6; }
-  .as-of strong { display: block; color: #F2F3F6; font-size: 0.95rem; font-family: var(--font-ui); font-weight: 600; margin-top: 0.15rem; }
-  .as-of #syncStatus { display: block; font-size: 0.74rem; margin-top: 0.3rem; color: #9DA8C6; }
-  .as-of #syncStatus.synced { color: #8FD9B0; }
-  .as-of #syncStatus.offline { color: #E0A340; }
+  /* Header */
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 40px; height: 40px; background: var(--primary); border-radius: 8px; display: grid; place-items: center; color: white; font-weight: bold; font-size: 1.2rem; }
+  h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+  .sub-title { font-size: 0.85rem; color: var(--text-muted); }
 
-  main { margin-top: -1.5rem; }
+  .header-actions { display: flex; items-center; gap: 12px; flex-wrap: wrap; }
+  .role-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; background: var(--status-pend-bg); color: var(--status-pend-txt); border: 1px solid var(--card-border); }
+  .btn {
+    padding: 8px 16px; border-radius: 6px; font-size: 0.875rem; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card); color: var(--text); display: inline-flex; align-items: center; gap: 8px; transition: all 0.15s;
+  }
+  .btn:hover { background: var(--bg); }
+  .btn-primary { background: var(--primary); color: white; border: none; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-word { background: #2B579A; color: white; border: none; }
+  .btn-word:hover { background: #1E3E6D; }
+  
+  /* DB Banner */
+  .db-banner {
+    padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--card-border); background: var(--card);
+  }
+  .db-status { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #94A3B8; }
+  .dot.online { background: #22C55E; }
+  .dot.local { background: #F59E0B; }
 
-  /* Dropzone */
-  #dropzone { display: none; }
-  .dropzone { margin-top: 2rem; background: var(--surface); border: 1.5px dashed var(--border); border-radius: 4px; padding: 3.5rem 2rem; text-align: center; transition: border-color 0.15s ease, background 0.15s ease; }
-  .dropzone.drag-over { border-color: var(--ink-soft); background: var(--neutral-bg); }
-  .dropzone h2 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 500; margin: 0 0 0.5rem; }
-  .dropzone p { color: var(--text-muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
-  .dropzone .actions-row { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+  /* Dashboard Summary Cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--card); border: 1px solid var(--card-border); padding: 16px; border-radius: 8px; cursor: pointer; transition: transform 0.1s, border-color 0.1s; }
+  .stat-card:hover { transform: translateY(-2px); border-color: var(--primary); }
+  .stat-card.active-filter { border: 2px solid var(--primary); }
+  .stat-num { font-size: 1.8rem; font-weight: 700; margin-top: 4px; }
+  .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-  .btn { display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--font-ui); font-weight: 600; font-size: 0.87rem; padding: 0.6rem 1.15rem; border-radius: 3px; border: none; cursor: pointer; background: var(--ink); color: #fff; }
-  .btn:hover { background: var(--ink-soft); }
-  .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
-  .btn.secondary:hover { background: var(--neutral-bg); }
-  .btn.small { font-size: 0.78rem; padding: 0.4rem 0.75rem; }
-  .btn.danger-ghost { background: transparent; color: var(--danger); border: 1px solid var(--danger-bg); }
-  .btn.danger-ghost:hover { background: var(--danger-bg); }
+  /* Controls Section */
+  .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+  .search-box { position: relative; flex: 1; min-width: 240px; }
+  .search-box input { width: 100%; padding: 8px 12px 8px 36px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
 
-  input[type="file"] { display: none; }
-  .file-error { margin-top: 1rem; color: var(--danger); font-size: 0.88rem; display: none; }
+  .filter-group { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  select { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); }
 
-  /* Data view */
-  #dataView { display: none; margin-top: 1.75rem; }
-  .meta-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-muted); }
-  .meta-row .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  /* Table */
+  .table-container { background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
+  th, td { padding: 12px 16px; border-bottom: 1px solid var(--card-border); }
+  th { background: var(--bg); color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(0,0,0,0.02); }
+  [data-theme="dark"] tr:hover td { background: rgba(255,255,255,0.02); }
 
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; margin-bottom: 1.1rem; }
-  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1rem 1.1rem; cursor: pointer; text-align: left; font-family: var(--font-ui); transition: box-shadow 0.12s ease, border-color 0.12s ease; }
-  .stat:hover { border-color: var(--ink-soft); }
-  .stat.active-filter { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-  .stat .num { font-family: var(--font-mono); font-size: 1.9rem; font-weight: 600; line-height: 1; display: block; }
-  .stat .label { color: var(--text-muted); font-size: 0.82rem; margin-top: 0.35rem; display: block; }
-  .stat.expired .num { color: var(--danger); }
-  .stat.critical .num { color: var(--warning); }
-  .stat.active .num { color: var(--success); }
-  .stat.pending .num { color: var(--text-muted); }
+  .resigned-row { opacity: 0.6; background: rgba(0,0,0,0.03); }
+  .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+  .badge-active { background: var(--status-active-bg); color: var(--status-active-txt); }
+  .badge-critical { background: var(--status-crit-bg); color: var(--status-crit-txt); }
+  .badge-expired { background: var(--status-exp-bg); color: var(--status-exp-txt); }
+  .badge-pending { background: var(--status-pend-bg); color: var(--status-pend-txt); }
+  .badge-resigned { background: var(--status-res-bg); color: var(--status-res-txt); }
 
-  .sub-note { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1.1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-  .sub-note label { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
-
-  .toolbar { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
-  .toolbar input[type="search"], .toolbar select { font-family: var(--font-ui); font-size: 0.88rem; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); color: var(--text); }
-  .toolbar input[type="search"] { flex: 1 1 220px; min-width: 180px; }
-  .toolbar select { min-width: 160px; }
-  .toolbar input:focus-visible, .toolbar select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-
-  .result-count { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 0.6rem; }
-
-  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 1180px; font-size: 0.86rem; }
-  thead th { text-align: left; padding: 0.7rem 0.8rem; background: var(--neutral-bg); color: var(--text-muted); font-weight: 600; font-size: 0.74rem; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; }
-  thead th.sortable { cursor: pointer; }
-  thead th.sortable:hover { color: var(--text); }
-  thead th.sorted::after { content: " " attr(data-dir); font-size: 0.7rem; }
-  tbody td { padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover { background: var(--neutral-bg); }
-  tbody tr.resigned-row { opacity: 0.55; }
-  td.num, td.date { font-family: var(--font-mono); font-size: 0.83rem; }
-  td.days { font-family: var(--font-mono); font-weight: 600; text-align: right; }
-  td.name { font-weight: 500; }
-  td.dept { color: var(--text-muted); }
-  td.actions-cell { white-space: nowrap; }
-
-  .pill { display: inline-block; font-size: 0.73rem; font-weight: 600; padding: 0.22rem 0.6rem; border-radius: 3px; white-space: nowrap; }
-  .pill.expired { background: var(--danger-bg); color: var(--danger); }
-  .pill.critical { background: var(--warning-bg); color: var(--warning); }
-  .pill.active { background: var(--success-bg); color: var(--success); }
-  .pill.pending { background: var(--neutral-bg); color: var(--text-muted); }
-  .pill.employed { background: var(--success-bg); color: var(--success); }
-  .pill.resigned { background: var(--neutral-bg); color: var(--text-muted); }
-
-  .link-btn { background: none; border: none; padding: 0; font-family: var(--font-ui); font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; text-decoration: underline; text-decoration-color: transparent; }
-  .link-btn:hover { text-decoration-color: var(--ink-soft); }
-  .link-btn.warn { color: var(--warning); }
-  .link-btn + .link-btn { margin-left: 0.65rem; }
-
-  .empty-row td { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
-
-  footer.hint { max-width: 1220px; margin: 2rem auto 0; padding: 0 1.5rem; color: var(--text-muted); font-size: 0.8rem; line-height: 1.6; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .action-btn { color: var(--link); cursor: pointer; text-decoration: underline; background: none; border: none; font-size: 0.85rem; padding: 2px 4px; }
+  .action-btn:hover { color: var(--primary-hover); }
 
   /* Modals */
-  .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 20, 32, 0.55); display: none; align-items: center; justify-content: center; padding: 1.5rem; z-index: 50; }
-  .modal-backdrop.open { display: flex; }
-  .modal { background: var(--surface); border-radius: 5px; max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 1.6rem 1.7rem; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
-  .modal h3 { font-family: var(--font-display); font-size: 1.3rem; font-weight: 500; margin: 0 0 0.3rem; }
-  .modal p.modal-sub { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1.2rem; }
-  .field { margin-bottom: 0.95rem; }
-  .field label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; }
-  .field input, .field select { width: 100%; font-family: var(--font-ui); font-size: 0.9rem; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 3px; background: var(--paper); color: var(--text); }
-  .field input:focus-visible, .field select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-  .field-row { display: flex; gap: 0.8rem; }
-  .field-row .field { flex: 1; }
-  .field-note { font-size: 0.76rem; color: var(--text-muted); margin-top: 0.3rem; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.3rem; }
-  .form-error { color: var(--danger); font-size: 0.82rem; margin-bottom: 0.9rem; display: none; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; place-items: center; z-index: 1000; padding: 20px; }
+  .modal { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; width: 100%; max-width: 500px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .modal-header h3 { font-size: 1.2rem; }
+  .close-modal { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--bg); color: var(--text); }
+  
+  .history-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .history-item { padding: 12px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--bg); font-size: 0.85rem; }
 
-  .history-emp { margin-bottom: 1.1rem; }
-  .history-emp .hname { font-family: var(--font-display); font-size: 1.15rem; font-weight: 500; margin: 0; }
-  .history-emp .hmeta { color: var(--text-muted); font-size: 0.85rem; margin: 0.2rem 0 0; }
-  .history-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
-  .history-list li { padding: 0.8rem 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
-  .history-list .hrange { font-family: var(--font-mono); font-size: 0.85rem; }
-  .history-list .hsource { font-size: 0.74rem; color: var(--text-muted); margin-top: 0.15rem; }
-  .history-list .htag { display: flex; gap: 0.4rem; align-items: center; }
-  .current-tag { font-size: 0.7rem; font-weight: 700; color: var(--ink-soft); border: 1px solid var(--ink-soft); border-radius: 3px; padding: 0.1rem 0.4rem; }
-
-  @media (max-width: 720px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    header.top { padding: 2rem 0 1.75rem; }
-    .as-of { text-align: left; }
-    .field-row { flex-direction: column; }
-  }
+  /* Utilities */
+  .hidden { display: none !important; }
+  .admin-only { display: inline-flex; }
+  body.viewer-mode .admin-only { display: none !important; }
 </style>
 </head>
 <body>
 
-<header class="top">
-  <div class="wrap">
-    <div>
-      <h1>Contract Tracker</h1>
-      <p>Import your contract register, add renewals as they happen, and see exactly how many days each employee has left.</p>
+<!-- Login Overlay -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div class="brand" style="justify-content: center; margin-bottom: 16px;">
+      <div class="brand-icon">MM</div>
     </div>
-    <div class="as-of">
-      Today
-      <strong id="todayLabel"></strong>
-      <span id="syncStatus"></span>
+    <h2>Majani Mingi Tracker</h2>
+    <p>Enter passkey to access system</p>
+    <input type="password" id="passkey-input" placeholder="Enter Password" autofocus />
+    <button onclick="handleLogin()">Sign In</button>
+    <div id="auth-error" class="auth-error">Invalid passkey. Please try again.</div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">MM</div>
+      <div>
+        <h1>Majani Mingi</h1>
+        <div class="sub-title">Employees Contract Tracker</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="role-badge" id="role-display">Guest</span>
+      <button class="btn" onclick="toggleTheme()" title="Toggle Theme">🌓 Mode</button>
+      <button class="btn btn-word" onclick="exportToWord()">📄 Export to Word</button>
+      <button class="btn btn-primary admin-only" onclick="openAddModal()">+ Add Contract</button>
+      <button class="btn admin-only" onclick="document.getElementById('excel-file').click()">📥 Import Excel</button>
+      <input type="file" id="excel-file" accept=".xlsx, .xls" class="hidden" onchange="handleExcelImport(event)"/>
+      <button class="btn" onclick="logout()" style="color: var(--status-crit-txt);">🔒 Lock</button>
+    </div>
+  </header>
+
+  <!-- Database Connection Banner -->
+  <div class="db-banner">
+    <div class="db-status">
+      <div id="db-dot" class="dot"></div>
+      <span id="db-status-text">Connecting to sync engine...</span>
+    </div>
+    <button class="action-btn admin-only" onclick="configureFirebase()">Configure Firebase DB</button>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="stats-grid">
+    <div class="stat-card" id="card-all" onclick="setFilter('all')">
+      <div class="stat-label">Total Tracked</div>
+      <div class="stat-num" id="stat-total">0</div>
+    </div>
+    <div class="stat-card" id="card-active" onclick="setFilter('active')">
+      <div class="stat-label">Active Contracts</div>
+      <div class="stat-num" style="color: var(--status-active-txt)" id="stat-active">0</div>
+    </div>
+    <div class="stat-card" id="card-critical" onclick="setFilter('critical')">
+      <div class="stat-label">Expiring (&le;30 Days)</div>
+      <div class="stat-num" style="color: var(--status-crit-txt)" id="stat-critical">0</div>
+    </div>
+    <div class="stat-card" id="card-expired" onclick="setFilter('expired')">
+      <div class="stat-label">Expired</div>
+      <div class="stat-num" style="color: var(--status-exp-txt)" id="stat-expired">0</div>
+    </div>
+    <div class="stat-card" id="card-resigned" onclick="setFilter('resigned')">
+      <div class="stat-label">Resigned / Inactive</div>
+      <div class="stat-num" style="color: var(--status-res-txt)" id="stat-resigned">0</div>
     </div>
   </div>
-</header>
 
-<main class="wrap">
-
-  <section class="dropzone" id="loadingState">
-    <h2>Loading&hellip;</h2>
-    <p>Checking for your saved data.</p>
-  </section>
-
-  <section class="dropzone" id="dropzone">
-    <h2>Get started</h2>
-    <p>Import the workbook that lists employee names, start dates, and end dates &mdash; or add your first employee by hand. Days remaining are calculated live against today's date.</p>
-    <div class="actions-row">
-      <button class="btn" id="browseBtn" type="button">Import workbook</button>
-      <button class="btn secondary" id="addFirstBtn" type="button">Add an employee manually</button>
+  <!-- Controls -->
+  <div class="controls">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="Search by name, payroll no, designation..." oninput="renderTable()"/>
     </div>
-    <input type="file" id="fileInput" accept=".xlsx,.xls">
-    <div class="file-error" id="fileError"></div>
-  </section>
-
-  <section id="dataView">
-    <div class="meta-row">
-      <span id="sourceLabel"></span>
-      <div class="actions">
-        <button class="btn secondary small" id="importBtn" type="button">Import workbook</button>
-        <button class="btn small" id="addContractBtn" type="button">Add contract</button>
-      </div>
+    <div class="filter-group">
+      <select id="dept-filter" onchange="renderTable()">
+        <option value="">All Departments</option>
+      </select>
+      <label style="font-size:0.85rem; display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" id="show-resigned-check" onchange="renderTable()"/> Show Resigned
+      </label>
     </div>
+  </div>
 
-    <div class="stats" id="stats">
-      <button class="stat expired" data-filter="expired" type="button">
-        <span class="num" id="countExpired">0</span>
-        <span class="label">Expired</span>
-      </button>
-      <button class="stat critical" data-filter="critical" type="button">
-        <span class="num" id="countCritical">0</span>
-        <span class="label">Critical &mdash; under 30 days</span>
-      </button>
-      <button class="stat active" data-filter="active" type="button">
-        <span class="num" id="countActive">0</span>
-        <span class="label">Active</span>
-      </button>
-      <button class="stat pending" data-filter="pending" type="button">
-        <span class="num" id="countPending">0</span>
-        <span class="label">Missing an end date</span>
-      </button>
-    </div>
+  <!-- Main Table -->
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Payroll</th>
+          <th>Employee Name</th>
+          <th>Department</th>
+          <th>Designation</th>
+          <th>Start Date</th>
+          <th>End Date</th>
+          <th>Period</th>
+          <th>Days Remaining</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="employee-tbody">
+        <!-- Rendered JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
 
-    <p class="sub-note">
-      <label><input type="checkbox" id="showResignedToggle"> Show resigned employees (<span id="resignedCount">0</span> hidden)</label>
-    </p>
-
-    <div class="toolbar">
-      <input type="search" id="searchInput" placeholder="Search name, department, payroll no.&hellip;">
-      <select id="deptFilter"><option value="">All departments</option></select>
-      <button class="btn secondary" id="clearFiltersBtn" type="button">Clear filters</button>
-    </div>
-
-    <p class="result-count" id="resultCount"></p>
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th class="sortable" data-key="payrollNo">Payroll No.</th>
-            <th class="sortable" data-key="name">Employee</th>
-            <th class="sortable" data-key="department">Department</th>
-            <th class="sortable" data-key="designation">Designation</th>
-            <th class="sortable" data-key="startDate">Start date</th>
-            <th class="sortable" data-key="endDate">End date</th>
-            <th>Period</th>
-            <th class="sortable sorted" data-key="daysRemaining" data-dir="&uarr;">Days remaining</th>
-            <th class="sortable" data-key="status">Status</th>
-            <th>Employment</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
-  </section>
-
-</main>
-
-<footer class="hint">
-  <span>Parsing happens in your browser &mdash; the workbook is never uploaded anywhere. Importing again adds new or renewed contracts without erasing what's already here.</span>
-  <button class="link-btn warn" id="clearAllBtn" type="button">Clear all data</button>
-</footer>
-
-<!-- Add / renew contract modal -->
-<div class="modal-backdrop" id="contractModalBackdrop">
+<!-- Add/Edit Contract Modal -->
+<div class="modal-overlay" id="add-modal">
   <div class="modal">
-    <h3 id="contractModalTitle">Add a contract</h3>
-    <p class="modal-sub" id="contractModalSub">Matching an existing payroll number or name adds this as a new contract period for that employee. Otherwise a new employee record is created.</p>
-    <div class="form-error" id="contractFormError"></div>
-    <form id="contractForm">
-      <div class="field-row">
-        <div class="field">
-          <label for="f_payrollNo">Payroll No. (optional)</label>
-          <input type="text" id="f_payrollNo">
-        </div>
-        <div class="field">
-          <label for="f_name">Employee name</label>
-          <input type="text" id="f_name" required>
-        </div>
+    <div class="modal-header">
+      <h3 id="modal-title">Add / Renew Contract</h3>
+      <button class="close-modal" onclick="closeAddModal()">&times;</button>
+    </div>
+    <form id="contract-form" onsubmit="saveContractForm(event)">
+      <div class="form-group">
+        <label>Payroll Number *</label>
+        <input type="text" id="form-payroll" required />
       </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="f_department">Department</label>
-          <input type="text" id="f_department">
-        </div>
-        <div class="field">
-          <label for="f_designation">Designation</label>
-          <input type="text" id="f_designation">
-        </div>
+      <div class="form-group">
+        <label>Employee Name *</label>
+        <input type="text" id="form-name" required />
       </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="f_startDate">Start date</label>
-          <input type="date" id="f_startDate" required>
-        </div>
-        <div class="field">
-          <label for="f_period">Contract period</label>
-          <select id="f_period">
-            <option value="">No end date yet</option>
-            <option value="1">1 month</option>
-            <option value="3">3 months</option>
-            <option value="6">6 months</option>
-            <option value="12">12 months</option>
-            <option value="24">24 months</option>
-            <option value="custom">Custom end date&hellip;</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label>Department</label>
+        <input type="text" id="form-dept" />
       </div>
-      <div class="field" id="f_endDateWrap" style="display:none;">
-        <label for="f_endDate">End date</label>
-        <input type="date" id="f_endDate">
+      <div class="form-group">
+        <label>Designation</label>
+        <input type="text" id="form-designation" />
       </div>
-      <p class="field-note" id="periodPreview"></p>
-      <p class="field-note">If this employee had resigned, adding a new contract marks them employed again.</p>
-      <div class="modal-actions">
-        <button type="button" class="btn secondary" id="contractCancelBtn">Cancel</button>
-        <button type="submit" class="btn" id="contractSubmitBtn">Add contract</button>
+      <div class="form-group">
+        <label>Start Date *</label>
+        <input type="date" id="form-start" required onchange="calculateModalEndDate()" />
+      </div>
+      <div class="form-group">
+        <label>Contract Period Preset</label>
+        <select id="form-period-preset" onchange="calculateModalEndDate()">
+          <option value="1">1 Month</option>
+          <option value="3">3 Months</option>
+          <option value="6">6 Months</option>
+          <option value="12" selected>12 Months (1 Year)</option>
+          <option value="24">24 Months (2 Years)</option>
+          <option value="none">No End Date (Pending)</option>
+          <option value="custom">Custom End Date...</option>
+        </select>
+      </div>
+      <div class="form-group" id="custom-end-group" style="display:none;">
+        <label>End Date</label>
+        <input type="date" id="form-end" onchange="calculateModalEndDate()" />
+      </div>
+      <div style="font-size:0.8rem; color:var(--primary); margin-bottom:16px;" id="period-calc-preview"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Save Contract Record</button>
+    </form>
+  </div>
+</div>
+
+<!-- Resign/Terminate Modal -->
+<div class="modal-overlay" id="resign-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Resign / Terminate Employee</h3>
+      <button class="close-modal" onclick="closeResignModal()">&times;</button>
+    </div>
+    <form id="resign-form" onsubmit="confirmResignation(event)">
+      <input type="hidden" id="resign-payroll" />
+      <div style="font-size:0.9rem; margin-bottom:12px; color:var(--text-muted);" id="resign-emp-info"></div>
+      <div class="form-group">
+        <label>Resignation / Termination Date *</label>
+        <input type="date" id="resign-date" required />
+      </div>
+      <div class="form-group">
+        <label>Reason / Location / Details *</label>
+        <textarea id="resign-reason" rows="3" required placeholder="Enter reason, exit location, or termination notes..."></textarea>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn" onclick="closeResignModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:var(--status-crit-txt);">Confirm Resignation</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- History modal -->
-<div class="modal-backdrop" id="historyModalBackdrop">
+<!-- History Modal -->
+<div class="modal-overlay" id="history-modal">
   <div class="modal">
-    <div class="history-emp">
-      <p class="hname" id="historyName"></p>
-      <p class="hmeta" id="historyMeta"></p>
+    <div class="modal-header">
+      <h3 id="history-emp-name">Contract History</h3>
+      <button class="close-modal" onclick="closeHistoryModal()">&times;</button>
     </div>
-    <ul class="history-list" id="historyList"></ul>
-    <div class="modal-actions">
-      <button type="button" class="btn secondary" id="historyCloseBtn">Close</button>
-    </div>
+    <div id="history-content" class="history-list"></div>
   </div>
 </div>
 
 <script>
-(function () {
-  "use strict";
+  // App State
+  let employees = [];
+  let currentFilter = 'all';
+  let userRole = null; // 'admin' or 'viewer'
+  let firebaseDb = null;
+  let firebaseConfig = JSON.parse(localStorage.getItem('mm_fb_config') || 'null');
 
-  var STORAGE_KEY = "contract-tracker:data:v2";
-  var LEGACY_KEY = "contract-tracker:rows:v1";
-
-  // ---------------------------------------------------------------
-  // To make your data show up the same on every device/browser, paste
-  // your Firebase Realtime Database URL below (see the setup guide).
-  // Leave it as "" to keep using this browser's local storage only.
-  //   var FIREBASE_DB_URL = "https://your-project-default-rtdb.firebaseio.com";
-  // ---------------------------------------------------------------
-  var FIREBASE_DB_URL = "https://mmsl-contract-tracker-default-rtdb.asia-southeast1.firebasedatabase.app/";
-
-  var todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  document.getElementById("todayLabel").textContent = todayStart.toLocaleDateString(undefined, {
-    weekday: "short", year: "numeric", month: "short", day: "numeric"
+  // Initialize
+  window.addEventListener('DOMContentLoaded', () => {
+    checkSavedAuth();
+    initFirebase();
+    loadLocalData();
   });
 
-  var state = {
-    employees: [],
-    lastImport: null,
-    sortKey: "daysRemaining",
-    sortDir: 1,
-    statusFilter: "",
-    deptFilter: "",
-    search: "",
-    showResigned: false
-  };
-
-  var dropzone = document.getElementById("dropzone");
-  var fileInput = document.getElementById("fileInput");
-  var fileError = document.getElementById("fileError");
-  var dataView = document.getElementById("dataView");
-  var tableBody = document.getElementById("tableBody");
-  var resultCount = document.getElementById("resultCount");
-
-  // ---------- persistence ----------
-  //
-  // Every save writes to localStorage immediately (so the app always
-  // works offline) and, if FIREBASE_DB_URL is set, also pushes the
-  // same data to the cloud so every device sees the same records.
-  // On load, the cloud copy wins when it's reachable and non-empty;
-  // otherwise this browser's local copy is used.
-
-  function syncStatus(s) {
-    var el = document.getElementById("syncStatus");
-    if (!el) return;
-    var map = {
-      "not-configured": "Saved in this browser only",
-      "checking": "Checking cloud\u2026",
-      "syncing": "Syncing\u2026",
-      "synced": "Synced to cloud",
-      "offline": "Offline \u2014 saved locally",
-      "local-only": "Saved in this browser only"
-    };
-    el.textContent = map[s] || "";
-    el.className = s === "synced" ? "synced" : (s === "offline" ? "offline" : "");
-  }
-
-  function cloudUrl() {
-    return FIREBASE_DB_URL.replace(/\/$/, "") + "/data.json";
-  }
-
-  function fetchWithTimeout(url, options, ms) {
-    var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, ms || 8000);
-    var opts = Object.assign({}, options, { signal: controller.signal });
-    return fetch(url, opts).finally(function () { clearTimeout(timer); });
-  }
-
-  function saveLocal() {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        employees: state.employees,
-        lastImport: state.lastImport
-      }));
-    } catch (e) { /* storage unavailable */ }
-  }
-
-  function saveCloud() {
-    if (!FIREBASE_DB_URL) { syncStatus("local-only"); return; }
-    syncStatus("syncing");
-    var payload = JSON.stringify({ employees: state.employees, lastImport: state.lastImport });
-    fetchWithTimeout(cloudUrl(), { method: "PUT", headers: { "Content-Type": "application/json" }, body: payload }, 8000)
-      .then(function (res) { syncStatus(res.ok ? "synced" : "offline"); })
-      .catch(function () { syncStatus("offline"); });
-  }
-
-  function saveState() {
-    saveLocal();
-    saveCloud();
-  }
-
-  function loadLocal() {
-    try {
-      var raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.employees) && parsed.employees.length) {
-          state.employees = parsed.employees;
-          state.lastImport = parsed.lastImport || null;
-          return true;
-        }
-        return false;
-      }
-      // migrate legacy v1 flat-row format if present
-      var legacyRaw = window.localStorage.getItem(LEGACY_KEY);
-      if (legacyRaw) {
-        var legacy = JSON.parse(legacyRaw);
-        if (legacy && Array.isArray(legacy.rows) && legacy.rows.length) {
-          state.employees = legacy.rows.map(function (r) {
-            return {
-              id: makeId(r.payrollNo, r.name),
-              payrollNo: r.payrollNo || "",
-              name: r.name,
-              department: r.department || "",
-              designation: r.designation || "",
-              active: true,
-              resignedAt: null,
-              contracts: [{
-                startDate: r.startDate || null,
-                endDate: r.endDate || null,
-                source: "import",
-                addedAt: legacy.importedAt || new Date().toISOString()
-              }]
-            };
-          });
-          state.lastImport = legacy.sourceName ? { fileName: legacy.sourceName, importedAt: legacy.importedAt } : null;
-          saveState(); // seed the cloud (if configured) with the migrated data
-          return true;
-        }
-      }
-      return false;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function loadState() {
-    if (!FIREBASE_DB_URL) {
-      syncStatus("not-configured");
-      return Promise.resolve(loadLocal());
-    }
-    syncStatus("checking");
-    return fetchWithTimeout(cloudUrl(), {}, 8000)
-      .then(function (res) { if (!res.ok) throw new Error("bad response"); return res.json(); })
-      .then(function (cloudData) {
-        if (cloudData && Array.isArray(cloudData.employees) && cloudData.employees.length) {
-          state.employees = cloudData.employees;
-          state.lastImport = cloudData.lastImport || null;
-          saveLocal();
-          syncStatus("synced");
-          return true;
-        }
-        // cloud reachable but empty — fall back to local, and if that
-        // has data, push it up so the cloud becomes the shared copy
-        return loadLocal();
-      })
-      .catch(function () {
-        syncStatus("offline");
-        return loadLocal();
-      });
-  }
-
-  function makeId(payrollNo, name) {
-    if (payrollNo != null && String(payrollNo).trim() !== "") return "p:" + String(payrollNo).trim();
-    return "n:" + String(name || "").trim().toLowerCase();
-  }
-
-  // ---------- excel parsing ----------
-
-  function normalizeHeader(h) { return String(h == null ? "" : h).trim().toLowerCase(); }
-
-  var HEADER_MAP = {
-    "payroll no.": "payrollNo", "payroll no": "payrollNo",
-    "employee name": "name", "department": "department", "designation": "designation",
-    "start date": "startDate", "duration (months)": "durationMonths", "end date": "endDate"
-  };
-
-  function excelDateToJS(v) {
-    if (v instanceof Date) return v;
-    if (typeof v === "number") {
-      var parsed = XLSX.SSF.parse_date_code(v);
-      if (!parsed) return null;
-      return new Date(parsed.y, parsed.m - 1, parsed.d);
-    }
-    if (typeof v === "string" && v.trim()) {
-      var d = new Date(v);
-      if (!isNaN(d.getTime())) return d;
-    }
-    return null;
-  }
-
-  function findHeaderRow(sheetRows) {
-    for (var i = 0; i < sheetRows.length; i++) {
-      var row = sheetRows[i] || [];
-      var hasName = false, hasEnd = false;
-      for (var j = 0; j < row.length; j++) {
-        var h = normalizeHeader(row[j]);
-        if (h === "employee name") hasName = true;
-        if (h === "end date") hasEnd = true;
-      }
-      if (hasName && hasEnd) return i;
-    }
-    return -1;
-  }
-
-  function parseWorkbook(wb) {
-    var byKey = {};
-    var order = [];
-
-    wb.SheetNames.forEach(function (sheetName) {
-      var ws = wb.Sheets[sheetName];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-      var headerIdx = findHeaderRow(rows);
-      if (headerIdx === -1) return;
-
-      var headerRow = rows[headerIdx];
-      var colIndex = {};
-      headerRow.forEach(function (h, idx) {
-        var key = HEADER_MAP[normalizeHeader(h)];
-        if (key) colIndex[key] = idx;
-      });
-      if (colIndex.name == null || colIndex.endDate == null) return;
-
-      for (var r = headerIdx + 1; r < rows.length; r++) {
-        var row = rows[r];
-        if (!row) continue;
-        var name = row[colIndex.name];
-        if (name == null || String(name).trim() === "") continue;
-
-        var payrollNo = colIndex.payrollNo != null ? row[colIndex.payrollNo] : null;
-        var department = colIndex.department != null ? row[colIndex.department] : null;
-        var designation = colIndex.designation != null ? row[colIndex.designation] : null;
-        var startDate = colIndex.startDate != null ? excelDateToJS(row[colIndex.startDate]) : null;
-        var endDate = colIndex.endDate != null ? excelDateToJS(row[colIndex.endDate]) : null;
-        var durationRaw = colIndex.durationMonths != null ? row[colIndex.durationMonths] : null;
-        var durationMonths = (durationRaw != null && durationRaw !== "" && !isNaN(Number(durationRaw))) ? Number(durationRaw) : null;
-
-        var key = makeId(payrollNo, name);
-        var entry = {
-          payrollNo: payrollNo != null ? String(payrollNo).trim() : "",
-          name: String(name).trim(),
-          department: department != null ? String(department).trim() : "",
-          designation: designation != null ? String(designation).trim() : "",
-          startDate: startDate ? startDate.toISOString() : null,
-          endDate: endDate ? endDate.toISOString() : null,
-          durationMonths: durationMonths
-        };
-
-        if (!(key in byKey)) order.push(key);
-        byKey[key] = entry;
-      }
-    });
-
-    return order.map(function (k) { return byKey[k]; });
-  }
-
-  // ---------- upsert (import + manual share this) ----------
-
-  function findEmployee(payrollNo, name) {
-    var id = makeId(payrollNo, name);
-    for (var i = 0; i < state.employees.length; i++) {
-      if (state.employees[i].id === id) return state.employees[i];
-    }
-    // fall back: if a payroll number was given but not matched, also try matching by name alone
-    if (payrollNo != null && String(payrollNo).trim() !== "") {
-      var nameId = makeId(null, name);
-      for (var j = 0; j < state.employees.length; j++) {
-        if (state.employees[j].id === nameId) return state.employees[j];
-      }
-    }
-    return null;
-  }
-
-  function sameContract(a, b) {
-    return (a.startDate || null) === (b.startDate || null) && (a.endDate || null) === (b.endDate || null);
-  }
-
-  function upsertContract(entry, source) {
-    var emp = findEmployee(entry.payrollNo, entry.name);
-    var now = new Date().toISOString();
-    var added = false, reactivated = false;
-
-    if (!emp) {
-      emp = {
-        id: makeId(entry.payrollNo, entry.name),
-        payrollNo: entry.payrollNo || "",
-        name: entry.name,
-        department: entry.department || "",
-        designation: entry.designation || "",
-        active: true,
-        resignedAt: null,
-        contracts: []
-      };
-      state.employees.push(emp);
-    }
-
-    if (entry.department) emp.department = entry.department;
-    if (entry.designation) emp.designation = entry.designation;
-    if (entry.payrollNo) emp.payrollNo = entry.payrollNo;
-
-    var dup = emp.contracts.some(function (c) { return sameContract(c, entry); });
-    if (!dup) {
-      emp.contracts.push({
-        startDate: entry.startDate || null,
-        endDate: entry.endDate || null,
-        durationMonths: (entry.durationMonths != null && !isNaN(entry.durationMonths)) ? entry.durationMonths : null,
-        source: source,
-        addedAt: now
-      });
-      added = true;
-    }
-
-    if (added && !emp.active) {
-      emp.active = true;
-      emp.resignedAt = null;
-      reactivated = true;
-    }
-
-    return { added: added, reactivated: reactivated };
-  }
-
-  // ---------- derived data ----------
-
-  function getCurrentContract(emp) {
-    if (!emp.contracts || !emp.contracts.length) return null;
-    var sorted = emp.contracts.slice().sort(function (a, b) {
-      var ta = a.startDate ? new Date(a.startDate).getTime() : -Infinity;
-      var tb = b.startDate ? new Date(b.startDate).getTime() : -Infinity;
-      if (tb !== ta) return tb - ta;
-      var aa = a.addedAt ? new Date(a.addedAt).getTime() : 0;
-      var ab = b.addedAt ? new Date(b.addedAt).getTime() : 0;
-      return ab - aa;
-    });
-    return sorted[0];
-  }
-
-  function statusForContract(contract) {
-    if (!contract || !contract.endDate) return "pending";
-    var end = new Date(contract.endDate);
-    end.setHours(0, 0, 0, 0);
-    var days = Math.round((end.getTime() - todayStart.getTime()) / 86400000);
-    if (days < 0) return "expired";
-    if (days <= 30) return "critical";
-    return "active";
-  }
-
-  function daysForContract(contract) {
-    if (!contract || !contract.endDate) return null;
-    var end = new Date(contract.endDate);
-    end.setHours(0, 0, 0, 0);
-    return Math.round((end.getTime() - todayStart.getTime()) / 86400000);
-  }
-
-  function addMonths(date, n) {
-    var d = new Date(date.getTime());
-    var day = d.getDate();
-    d.setDate(1);
-    d.setMonth(d.getMonth() + n);
-    var lastDayOfTarget = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    d.setDate(Math.min(day, lastDayOfTarget));
-    return d;
-  }
-
-  function periodLabel(contract) {
-    if (!contract) return "\u2014";
-    if (contract.durationMonths != null && !isNaN(contract.durationMonths)) {
-      var n = contract.durationMonths;
-      return n + " month" + (n === 1 ? "" : "s");
-    }
-    if (contract.startDate && contract.endDate) {
-      var days = Math.round((new Date(contract.endDate).getTime() - new Date(contract.startDate).getTime()) / 86400000);
-      if (days < 28) return days + " day" + (days === 1 ? "" : "s");
-      var months = Math.round(days / 30.4368);
-      return "~" + months + " month" + (months === 1 ? "" : "s");
-    }
-    return "\u2014";
-  }
-
-  function deriveRow(emp) {
-    var current = getCurrentContract(emp);
-    return {
-      id: emp.id,
-      payrollNo: emp.payrollNo,
-      name: emp.name,
-      department: emp.department,
-      designation: emp.designation,
-      active: emp.active,
-      startDate: current ? current.startDate : null,
-      endDate: current ? current.endDate : null,
-      period: periodLabel(current),
-      daysRemaining: daysForContract(current),
-      status: statusForContract(current),
-      contractCount: emp.contracts ? emp.contracts.length : 0
-    };
-  }
-
-  // ---------- rendering ----------
-
-  function fmtDate(iso) {
-    if (!iso) return "\u2014";
-    return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-  }
-
-  function statusLabel(s) { return { expired: "Expired", critical: "Critical", active: "Active", pending: "Pending data" }[s] || s; }
-
-  function daysLabel(row) {
-    if (row.daysRemaining == null) return "\u2014";
-    if (row.daysRemaining < 0) return Math.abs(row.daysRemaining) + "d overdue";
-    if (row.daysRemaining === 0) return "Today";
-    return row.daysRemaining + "d";
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
-
-  function populateDeptFilter(rows) {
-    var sel = document.getElementById("deptFilter");
-    var current = sel.value;
-    var depts = Array.from(new Set(rows.map(function (r) { return r.department; }).filter(Boolean))).sort();
-    sel.innerHTML = '<option value="">All departments</option>' +
-      depts.map(function (d) { return '<option value="' + escapeHtml(d) + '">' + escapeHtml(d) + "</option>"; }).join("");
-    if (depts.indexOf(current) !== -1) sel.value = current;
-  }
-
-  function getFilteredSorted() {
-    var all = state.employees.map(deriveRow);
-    var visible = state.showResigned ? all : all.filter(function (r) { return r.active; });
-    var q = state.search.trim().toLowerCase();
-
-    var filtered = visible.filter(function (r) {
-      if (state.statusFilter && r.status !== state.statusFilter) return false;
-      if (state.deptFilter && r.department !== state.deptFilter) return false;
-      if (q) {
-        var hay = (r.name + " " + r.department + " " + r.designation + " " + r.payrollNo).toLowerCase();
-        if (hay.indexOf(q) === -1) return false;
-      }
-      return true;
-    });
-
-    filtered.sort(function (a, b) {
-      var ka = a[state.sortKey], kb = b[state.sortKey];
-      if (state.sortKey === "daysRemaining") {
-        var va = ka == null ? Infinity : ka, vb = kb == null ? Infinity : kb;
-        return (va - vb) * state.sortDir;
-      }
-      if (state.sortKey === "startDate" || state.sortKey === "endDate") {
-        var da = ka ? new Date(ka).getTime() : -Infinity, db_ = kb ? new Date(kb).getTime() : -Infinity;
-        return (da - db_) * state.sortDir;
-      }
-      var sa = (ka || "").toString().toLowerCase(), sb = (kb || "").toString().toLowerCase();
-      if (sa < sb) return -1 * state.sortDir;
-      if (sa > sb) return 1 * state.sortDir;
-      return 0;
-    });
-
-    return { all: all, activeOnly: all.filter(function (r) { return r.active; }), filtered: filtered };
-  }
-
-  function render() {
-    var res = getFilteredSorted();
-    var activeOnly = res.activeOnly, filtered = res.filtered, all = res.all;
-
-    var counts = { expired: 0, critical: 0, active: 0, pending: 0 };
-    activeOnly.forEach(function (r) { counts[r.status]++; });
-    document.getElementById("countExpired").textContent = counts.expired;
-    document.getElementById("countCritical").textContent = counts.critical;
-    document.getElementById("countActive").textContent = counts.active;
-    document.getElementById("countPending").textContent = counts.pending;
-    document.getElementById("resignedCount").textContent = all.length - activeOnly.length;
-
-    document.querySelectorAll(".stat").forEach(function (btn) {
-      btn.classList.toggle("active-filter", btn.getAttribute("data-filter") === state.statusFilter);
-    });
-
-    populateDeptFilter(state.showResigned ? all : activeOnly);
-
-    resultCount.textContent = filtered.length + " of " + (state.showResigned ? all.length : activeOnly.length) + " employee" + (activeOnly.length === 1 ? "" : "s") + " shown";
-
-    if (!filtered.length) {
-      tableBody.innerHTML = '<tr class="empty-row"><td colspan="11">No employees match these filters.</td></tr>';
+  // Auth Handling
+  function handleLogin() {
+    const input = document.getElementById('passkey-input').value.trim();
+    const err = document.getElementById('auth-error');
+    if (input === '1234') {
+      userRole = 'admin';
+      sessionStorage.setItem('mm_role', 'admin');
+      applyAuth();
+    } else if (input === '6789') {
+      userRole = 'viewer';
+      sessionStorage.setItem('mm_role', 'viewer');
+      applyAuth();
     } else {
-      tableBody.innerHTML = filtered.map(function (r) {
-        return '<tr class="' + (r.active ? "" : "resigned-row") + '" data-id="' + escapeHtml(r.id) + '">' +
-          '<td class="num">' + escapeHtml(r.payrollNo || "\u2014") + "</td>" +
-          '<td class="name">' + escapeHtml(r.name) + "</td>" +
-          '<td class="dept">' + escapeHtml(r.department || "\u2014") + "</td>" +
-          "<td>" + escapeHtml(r.designation || "\u2014") + "</td>" +
-          '<td class="date">' + fmtDate(r.startDate) + "</td>" +
-          '<td class="date">' + fmtDate(r.endDate) + "</td>" +
-          '<td class="dept">' + escapeHtml(r.period) + "</td>" +
-          '<td class="days">' + daysLabel(r) + "</td>" +
-          '<td><span class="pill ' + r.status + '">' + statusLabel(r.status) + "</span></td>" +
-          '<td><span class="pill ' + (r.active ? "employed" : "resigned") + '">' + (r.active ? "Employed" : "Resigned") + "</span></td>" +
-          '<td class="actions-cell">' +
-            '<button class="link-btn" data-action="history" data-id="' + escapeHtml(r.id) + '">History (' + r.contractCount + ")</button>" +
-            '<button class="link-btn" data-action="renew" data-id="' + escapeHtml(r.id) + '">Renew</button>' +
-            '<button class="link-btn ' + (r.active ? "warn" : "") + '" data-action="toggle-active" data-id="' + escapeHtml(r.id) + '">' + (r.active ? "Resign" : "Reactivate") + "</button>" +
-          "</td>" +
-        "</tr>";
-      }).join("");
+      err.style.display = 'block';
+    }
+  }
+
+  function checkSavedAuth() {
+    const saved = sessionStorage.getItem('mm_role');
+    if (saved === 'admin' || saved === 'viewer') {
+      userRole = saved;
+      applyAuth();
+    }
+  }
+
+  function applyAuth() {
+    document.getElementById('auth-overlay').style.display = 'none';
+    document.getElementById('role-display').innerText = userRole.toUpperCase();
+    if (userRole === 'viewer') {
+      document.body.classList.add('viewer-mode');
+    } else {
+      document.body.classList.remove('viewer-mode');
+    }
+    renderTable();
+  }
+
+  function logout() {
+    sessionStorage.removeItem('mm_role');
+    location.reload();
+  }
+
+  // Theme
+  function toggleTheme() {
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  }
+
+  // Database / Sync
+  function initFirebase() {
+    if (!firebaseConfig) {
+      updateDbStatus('local', 'Local Storage Mode (Configure Firebase for live cloud sync)');
+      return;
+    }
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      firebaseDb = firebase.database();
+      updateDbStatus('online', 'Synced with Cloud Firebase DB');
+      
+      firebaseDb.ref('employees').on('value', snapshot => {
+        const val = snapshot.val();
+        if (val) {
+          employees = Array.isArray(val) ? val : Object.values(val);
+          saveLocalData(false);
+          renderTable();
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      updateDbStatus('local', 'Firebase error - fallback to Local Storage');
+    }
+  }
+
+  function updateDbStatus(type, text) {
+    const dot = document.getElementById('db-dot');
+    dot.className = 'dot ' + type;
+    document.getElementById('db-status-text').innerText = text;
+  }
+
+  function configureFirebase() {
+    const url = prompt("ttps://mmsl-contract-tracker-default-rtdb.asia-southeast1.firebasedatabase.app/");
+    if (url) {
+      const config = { databaseURL: url };
+      localStorage.setItem('mm_fb_config', JSON.stringify(config));
+      location.reload();
+    }
+  }
+
+  function saveData() {
+    saveLocalData(true);
+    if (firebaseDb && userRole === 'admin') {
+      firebaseDb.ref('employees').set(employees);
+    }
+  }
+
+  function saveLocalData(triggerRender = true) {
+    localStorage.setItem('mm_employees_data', JSON.stringify(employees));
+    if (triggerRender) renderTable();
+  }
+
+  function loadLocalData() {
+    const local = localStorage.getItem('mm_employees_data');
+    if (local) {
+      try { employees = JSON.parse(local); } catch(e){}
+    }
+    renderTable();
+  }
+
+  // Date Utilities
+  function getDaysRemaining(endDateStr) {
+    if (!endDateStr) return null;
+    const end = new Date(endDateStr);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    end.setHours(0,0,0,0);
+    const diffTime = end - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }
+
+  function addMonths(date, months) {
+    const d = new Date(date);
+    d.setMonth(d.getMonth() + parseInt(months));
+    return d.toISOString().split('T')[0];
+  }
+
+  // Calculation & Rendering
+  function renderTable() {
+    const tbody = document.getElementById('employee-tbody');
+    const search = document.getElementById('search-input').value.toLowerCase();
+    const dept = document.getElementById('dept-filter').value;
+    const showResigned = document.getElementById('show-resigned-check').checked;
+
+    // Populate dept dropdown
+    const depts = [...new Set(employees.map(e => e.department).filter(Boolean))];
+    const deptSelect = document.getElementById('dept-filter');
+    const currentDept = deptSelect.value;
+    deptSelect.innerHTML = '<option value="">All Departments</option>' + 
+      depts.map(d => `<option value="${d}" ${d===currentDept?'selected':''}>${d}</option>`).join('');
+
+    let counts = { total: 0, active: 0, critical: 0, expired: 0, resigned: 0 };
+
+    tbody.innerHTML = '';
+
+    employees.forEach(emp => {
+      const isResigned = emp.status === 'Resigned';
+      if (isResigned) counts.resigned++;
+      else counts.total++;
+
+      // Active contract logic
+      const latestContract = emp.contracts && emp.contracts.length ? emp.contracts[emp.contracts.length - 1] : {};
+      const days = getDaysRemaining(latestContract.endDate);
+      
+      let statusTag = 'Active';
+      if (isResigned) {
+        statusTag = 'Resigned';
+      } else if (!latestContract.endDate) {
+        statusTag = 'Pending';
+      } else if (days < 0) {
+        statusTag = 'Expired';
+        counts.expired++;
+      } else if (days <= 30) {
+        statusTag = 'Critical';
+        counts.critical++;
+        counts.active++;
+      } else {
+        counts.active++;
+      }
+
+      // Filter check
+      if (!showResigned && isResigned && currentFilter !== 'resigned') return;
+      if (currentFilter === 'active' && (isResigned || days < 0)) return;
+      if (currentFilter === 'critical' && (isResigned || days > 30 || days < 0)) return;
+      if (currentFilter === 'expired' && (isResigned || days >= 0 || !latestContract.endDate)) return;
+      if (currentFilter === 'resigned' && !isResigned) return;
+
+      if (dept && emp.department !== dept) return;
+
+      const searchStr = `${emp.payrollNo} ${emp.name} ${emp.department} ${emp.designation}`.toLowerCase();
+      if (search && !searchStr.includes(search)) return;
+
+      // Create row
+      const tr = document.createElement('tr');
+      if (isResigned) tr.className = 'resigned-row';
+
+      let statusBadgeClass = 'badge-active';
+      if (statusTag === 'Critical') statusBadgeClass = 'badge-critical';
+      if (statusTag === 'Expired') statusBadgeClass = 'badge-expired';
+      if (statusTag === 'Pending') statusBadgeClass = 'badge-pending';
+      if (statusTag === 'Resigned') statusBadgeClass = 'badge-resigned';
+
+      tr.innerHTML = `
+        <td>${emp.payrollNo || '-'}</td>
+        <td><strong>${emp.name}</strong></td>
+        <td>${emp.department || '-'}</td>
+        <td>${emp.designation || '-'}</td>
+        <td>${latestContract.startDate || '-'}</td>
+        <td>${latestContract.endDate || 'No Expiry'}</td>
+        <td>${latestContract.period || '-'}</td>
+        <td>${days !== null ? (days < 0 ? `${Math.abs(days)} days ago` : `${days} days`) : '-'}</td>
+        <td><span class="badge ${statusBadgeClass}">${statusTag}</span></td>
+        <td>
+          <button class="action-btn" onclick="openHistory('${emp.payrollNo}')">History (${emp.contracts ? emp.contracts.length : 0})</button>
+          ${userRole === 'admin' ? `
+            ${isResigned ? 
+              `<button class="action-btn" style="color:var(--status-active-txt)" onclick="reactivateEmp('${emp.payrollNo}')">Reactivate</button>` :
+              `<button class="action-btn" style="color:var(--status-crit-txt)" onclick="openResignModal('${emp.payrollNo}')">Resign</button>`
+            }
+          ` : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Update stat cards
+    document.getElementById('stat-total').innerText = counts.total;
+    document.getElementById('stat-active').innerText = counts.active;
+    document.getElementById('stat-critical').innerText = counts.critical;
+    document.getElementById('stat-expired').innerText = counts.expired;
+    document.getElementById('stat-resigned').innerText = counts.resigned;
+  }
+
+  function setFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active-filter'));
+    const card = document.getElementById(`card-${filter}`);
+    if (card) card.classList.add('active-filter');
+    renderTable();
+  }
+
+  // Modals and Handlers
+  function openAddModal() {
+    document.getElementById('contract-form').reset();
+    document.getElementById('custom-end-group').style.display = 'none';
+    document.getElementById('add-modal').style.display = 'grid';
+  }
+  function closeAddModal() { document.getElementById('add-modal').style.display = 'none'; }
+
+  function calculateModalEndDate() {
+    const start = document.getElementById('form-start').value;
+    const preset = document.getElementById('form-period-preset').value;
+    const customGroup = document.getElementById('custom-end-group');
+    const preview = document.getElementById('period-calc-preview');
+
+    if (preset === 'custom') {
+      customGroup.style.display = 'block';
+      preview.innerText = '';
+      return;
+    } else {
+      customGroup.style.display = 'none';
     }
 
-    document.querySelectorAll("thead th.sortable").forEach(function (th) {
-      var key = th.getAttribute("data-key");
-      th.classList.toggle("sorted", key === state.sortKey);
-      if (key === state.sortKey) th.setAttribute("data-dir", state.sortDir === 1 ? "\u2191" : "\u2193");
+    if (start && preset !== 'none') {
+      const calculatedEnd = addMonths(start, preset);
+      document.getElementById('form-end').value = calculatedEnd;
+      preview.innerText = `Calculated End Date: ${calculatedEnd}`;
+    } else {
+      document.getElementById('form-end').value = '';
+      preview.innerText = preset === 'none' ? 'No end date set (Pending status)' : '';
+    }
+  }
+
+  function saveContractForm(e) {
+    e.preventDefault();
+    const payroll = document.getElementById('form-payroll').value.trim();
+    const name = document.getElementById('form-name').value.trim();
+    const dept = document.getElementById('form-dept').value.trim();
+    const designation = document.getElementById('form-designation').value.trim();
+    const startDate = document.getElementById('form-start').value;
+    const preset = document.getElementById('form-period-preset').value;
+    const endDate = document.getElementById('form-end').value;
+
+    let periodText = preset === 'none' ? 'Indefinite' : (preset === 'custom' ? 'Custom' : `${preset} Months`);
+
+    let emp = employees.find(x => x.payrollNo === payroll);
+    if (!emp) {
+      emp = { payrollNo: payroll, name, department: dept, designation, status: 'Active', contracts: [] };
+      employees.push(emp);
+    } else {
+      emp.name = name;
+      emp.department = dept;
+      emp.designation = designation;
+      emp.status = 'Active'; // auto reactivate if adding new contract
+    }
+
+    emp.contracts.push({
+      startDate,
+      endDate: endDate || null,
+      period: periodText,
+      createdAt: new Date().toISOString()
     });
+
+    saveData();
+    closeAddModal();
   }
 
-  function showData() {
-    dropzone.style.display = "none";
-    dataView.style.display = "block";
-    var when = state.lastImport && state.lastImport.importedAt ? new Date(state.lastImport.importedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
-    document.getElementById("sourceLabel").textContent = state.lastImport
-      ? "Last import: " + state.lastImport.fileName + (when ? " \u00b7 " + when : "")
-      : "No workbook imported yet \u2014 employees added manually";
-    render();
+  // Resign Modal
+  function openResignModal(payrollNo) {
+    const emp = employees.find(x => x.payrollNo === payrollNo);
+    if (!emp) return;
+    document.getElementById('resign-payroll').value = payrollNo;
+    document.getElementById('resign-emp-info').innerText = `Employee: ${emp.name} (${emp.payrollNo})`;
+    document.getElementById('resign-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('resign-reason').value = '';
+    document.getElementById('resign-modal').style.display = 'grid';
+  }
+  function closeResignModal() { document.getElementById('resign-modal').style.display = 'none'; }
+
+  function confirmResignation(e) {
+    e.preventDefault();
+    const payroll = document.getElementById('resign-payroll').value;
+    const date = document.getElementById('resign-date').value;
+    const reason = document.getElementById('resign-reason').value;
+
+    const emp = employees.find(x => x.payrollNo === payroll);
+    if (emp) {
+      emp.status = 'Resigned';
+      emp.resignationDetails = { date, reason };
+      saveData();
+    }
+    closeResignModal();
   }
 
-  function showDropzone() {
-    dropzone.style.display = "block";
-    dataView.style.display = "none";
+  function reactivateEmp(payrollNo) {
+    const emp = employees.find(x => x.payrollNo === payrollNo);
+    if (emp && confirm(`Reactivate ${emp.name}?`)) {
+      emp.status = 'Active';
+      delete emp.resignationDetails;
+      saveData();
+    }
   }
 
-  function refresh() {
-    if (state.employees.length) showData(); else showDropzone();
+  // History Modal
+  function openHistory(payrollNo) {
+    const emp = employees.find(x => x.payrollNo === payrollNo);
+    if (!emp) return;
+    document.getElementById('history-emp-name').innerText = `Contract History - ${emp.name}`;
+    const container = document.getElementById('history-content');
+    container.innerHTML = '';
+
+    if (emp.resignationDetails) {
+      container.innerHTML += `
+        <div class="history-item" style="border-color: var(--status-crit-txt); background: rgba(239, 68, 68, 0.1);">
+          <strong>RESIGNED / TERMINATED</strong><br/>
+          <strong>Date:</strong> ${emp.resignationDetails.date}<br/>
+          <strong>Reason / Location:</strong> ${emp.resignationDetails.reason}
+        </div>
+      `;
+    }
+
+    if (emp.contracts && emp.contracts.length) {
+      emp.contracts.slice().reverse().forEach((c, index) => {
+        container.innerHTML += `
+          <div class="history-item">
+            <strong>Contract Period ${emp.contracts.length - index}</strong><br/>
+            <strong>Start Date:</strong> ${c.startDate || 'N/A'}<br/>
+            <strong>End Date:</strong> ${c.endDate || 'No Expiry'}<br/>
+            <strong>Period:</strong> ${c.period || 'N/A'}
+          </div>
+        `;
+      });
+    } else {
+      container.innerHTML += '<p>No contract history recorded.</p>';
+    }
+
+    document.getElementById('history-modal').style.display = 'grid';
   }
+  function closeHistoryModal() { document.getElementById('history-modal').style.display = 'none'; }
 
-  // ---------- file handling ----------
+  // Excel Import
+  function handleExcelImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  function handleFile(file) {
-    fileError.style.display = "none";
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      try {
-        var data = new Uint8Array(e.target.result);
-        var wb = XLSX.read(data, { type: "array", cellDates: false });
-        var entries = parseWorkbook(wb);
-        if (!entries.length) {
-          fileError.textContent = "Couldn't find a sheet with \u201cEmployee Name\u201d and \u201cEnd Date\u201d columns. Check the workbook and try again.";
-          fileError.style.display = "block";
-          return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(firstSheet);
+
+      json.forEach(row => {
+        const payroll = String(row['Payroll'] || row['Payroll No'] || row['PayrollNo'] || '').trim();
+        const name = row['Employee Name'] || row['Name'] || row['Employee'];
+        if (!payroll || !name) return;
+
+        let emp = employees.find(x => x.payrollNo === payroll);
+        if (!emp) {
+          emp = { payrollNo: payroll, name, department: row['Department'] || '', designation: row['Designation'] || '', status: 'Active', contracts: [] };
+          employees.push(emp);
         }
-        entries.forEach(function (entry) { upsertContract(entry, "import"); });
-        state.lastImport = { fileName: file.name, importedAt: new Date().toISOString() };
-        saveState();
-        refresh();
-      } catch (err) {
-        fileError.textContent = "Couldn't read that file. Make sure it's a valid .xlsx workbook.";
-        fileError.style.display = "block";
-      }
-    };
-    reader.onerror = function () {
-      fileError.textContent = "Couldn't read that file. Please try again.";
-      fileError.style.display = "block";
+
+        const startDate = row['Start Date'] ? formatDate(row['Start Date']) : '';
+        const endDate = row['End Date'] ? formatDate(row['End Date']) : '';
+        const period = row['Period'] || row['Duration'] || '';
+
+        // Add contract if not existing duplicate
+        const exists = emp.contracts.some(c => c.startDate === startDate && c.endDate === endDate);
+        if (!exists) {
+          emp.contracts.push({ startDate, endDate, period, createdAt: new Date().toISOString() });
+        }
+      });
+
+      saveData();
+      alert('Excel Import Completed Successfully!');
     };
     reader.readAsArrayBuffer(file);
   }
 
-  document.getElementById("browseBtn").addEventListener("click", function () { fileInput.click(); });
-  document.getElementById("importBtn").addEventListener("click", function () { fileInput.click(); });
-  fileInput.addEventListener("change", function () {
-    if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
-    fileInput.value = "";
-  });
-
-  ["dragenter", "dragover"].forEach(function (evt) {
-    dropzone.addEventListener(evt, function (e) { e.preventDefault(); dropzone.classList.add("drag-over"); });
-  });
-  ["dragleave", "drop"].forEach(function (evt) {
-    dropzone.addEventListener(evt, function (e) { e.preventDefault(); dropzone.classList.remove("drag-over"); });
-  });
-  dropzone.addEventListener("drop", function (e) {
-    var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  });
-
-  // ---------- filter / sort controls ----------
-
-  document.getElementById("searchInput").addEventListener("input", function (e) { state.search = e.target.value; render(); });
-  document.getElementById("deptFilter").addEventListener("change", function (e) { state.deptFilter = e.target.value; render(); });
-  document.getElementById("showResignedToggle").addEventListener("change", function (e) { state.showResigned = e.target.checked; render(); });
-  document.getElementById("clearFiltersBtn").addEventListener("click", function () {
-    state.search = ""; state.deptFilter = ""; state.statusFilter = "";
-    document.getElementById("searchInput").value = "";
-    render();
-  });
-  document.querySelectorAll(".stat").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var f = btn.getAttribute("data-filter");
-      state.statusFilter = state.statusFilter === f ? "" : f;
-      render();
-    });
-  });
-  document.querySelectorAll("thead th.sortable").forEach(function (th) {
-    th.addEventListener("click", function () {
-      var key = th.getAttribute("data-key");
-      if (state.sortKey === key) state.sortDir *= -1; else { state.sortKey = key; state.sortDir = 1; }
-      render();
-    });
-  });
-
-  document.getElementById("clearAllBtn").addEventListener("click", function () {
-    if (!window.confirm("Clear all employees and contract history? This can't be undone.")) return;
-    state.employees = [];
-    state.lastImport = null;
-    saveState();
-    refresh();
-  });
-
-  // ---------- row actions ----------
-
-  tableBody.addEventListener("click", function (e) {
-    var btn = e.target.closest("[data-action]");
-    if (!btn) return;
-    var id = btn.getAttribute("data-id");
-    var emp = state.employees.find(function (x) { return x.id === id; });
-    if (!emp) return;
-
-    if (btn.getAttribute("data-action") === "toggle-active") {
-      emp.active = !emp.active;
-      emp.resignedAt = emp.active ? null : new Date().toISOString();
-      saveState();
-      render();
-    } else if (btn.getAttribute("data-action") === "history") {
-      openHistory(emp);
-    } else if (btn.getAttribute("data-action") === "renew") {
-      openContractModal(emp);
+  function formatDate(excelDate) {
+    if (typeof excelDate === 'number') {
+      const date = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+      return date.toISOString().split('T')[0];
     }
-  });
-
-  // ---------- add / renew contract modal ----------
-
-  var contractBackdrop = document.getElementById("contractModalBackdrop");
-  var contractForm = document.getElementById("contractForm");
-  var contractFormError = document.getElementById("contractFormError");
-  var f_payrollNo = document.getElementById("f_payrollNo");
-  var f_name = document.getElementById("f_name");
-  var f_department = document.getElementById("f_department");
-  var f_designation = document.getElementById("f_designation");
-  var f_startDate = document.getElementById("f_startDate");
-  var f_period = document.getElementById("f_period");
-  var f_endDateWrap = document.getElementById("f_endDateWrap");
-  var f_endDate = document.getElementById("f_endDate");
-  var periodPreview = document.getElementById("periodPreview");
-
-  function updatePeriodPreview() {
-    var val = f_period.value;
-    if (val === "custom") {
-      f_endDateWrap.style.display = "block";
-      periodPreview.textContent = "";
-      return;
-    }
-    f_endDateWrap.style.display = "none";
-    if (!val) { periodPreview.textContent = "No end date will be set \u2014 this shows as pending until you add one."; return; }
-    if (!f_startDate.value) { periodPreview.textContent = "Pick a start date to see the calculated end date."; return; }
-    var start = new Date(f_startDate.value + "T00:00:00");
-    var end = addMonths(start, parseInt(val, 10));
-    periodPreview.textContent = "Ends " + end.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-  }
-  f_period.addEventListener("change", updatePeriodPreview);
-  f_startDate.addEventListener("change", updatePeriodPreview);
-
-  function openContractModal(emp) {
-    contractFormError.style.display = "none";
-    contractForm.reset();
-    f_endDateWrap.style.display = "none";
-    periodPreview.textContent = "";
-    if (emp) {
-      document.getElementById("contractModalTitle").textContent = "Renew contract";
-      document.getElementById("contractModalSub").textContent = "Adding this for " + emp.name + " creates a new contract period in their history.";
-      f_payrollNo.value = emp.payrollNo || "";
-      f_name.value = emp.name || "";
-      f_department.value = emp.department || "";
-      f_designation.value = emp.designation || "";
-    } else {
-      document.getElementById("contractModalTitle").textContent = "Add a contract";
-      document.getElementById("contractModalSub").textContent = "Matching an existing payroll number or name adds this as a new contract period for that employee. Otherwise a new employee record is created.";
-    }
-    contractBackdrop.classList.add("open");
-    f_name.focus();
-  }
-  function closeContractModal() { contractBackdrop.classList.remove("open"); }
-
-  document.getElementById("addContractBtn").addEventListener("click", function () { openContractModal(null); });
-  document.getElementById("addFirstBtn").addEventListener("click", function () { openContractModal(null); });
-  document.getElementById("contractCancelBtn").addEventListener("click", closeContractModal);
-  contractBackdrop.addEventListener("click", function (e) { if (e.target === contractBackdrop) closeContractModal(); });
-
-  contractForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var name = f_name.value.trim();
-    if (!name) { contractFormError.textContent = "Employee name is required."; contractFormError.style.display = "block"; return; }
-    if (!f_startDate.value) { contractFormError.textContent = "Start date is required."; contractFormError.style.display = "block"; return; }
-
-    var start = new Date(f_startDate.value + "T00:00:00");
-    var startDate = start.toISOString();
-    var periodVal = f_period.value;
-    var endDate = null;
-    var durationMonths = null;
-
-    if (periodVal === "custom") {
-      if (!f_endDate.value) {
-        contractFormError.textContent = "Pick an end date, or choose a preset period instead.";
-        contractFormError.style.display = "block";
-        return;
-      }
-      var end = new Date(f_endDate.value + "T00:00:00");
-      if (end < start) {
-        contractFormError.textContent = "End date can't be before the start date.";
-        contractFormError.style.display = "block";
-        return;
-      }
-      endDate = end.toISOString();
-    } else if (periodVal) {
-      durationMonths = parseInt(periodVal, 10);
-      endDate = addMonths(start, durationMonths).toISOString();
-    }
-    // else: no period chosen and no custom date — contract has no end date yet (pending)
-
-    var entry = {
-      payrollNo: f_payrollNo.value.trim(),
-      name: name,
-      department: f_department.value.trim(),
-      designation: f_designation.value.trim(),
-      startDate: startDate,
-      endDate: endDate,
-      durationMonths: durationMonths
-    };
-    upsertContract(entry, "manual");
-    saveState();
-    closeContractModal();
-    refresh();
-  });
-
-  // ---------- history modal ----------
-
-  var historyBackdrop = document.getElementById("historyModalBackdrop");
-  var historyList = document.getElementById("historyList");
-
-  function openHistory(emp) {
-    document.getElementById("historyName").textContent = emp.name;
-    document.getElementById("historyMeta").textContent =
-      [emp.payrollNo ? "Payroll No. " + emp.payrollNo : null, emp.department, emp.designation].filter(Boolean).join(" \u00b7 ") +
-      (emp.active ? "" : " \u00b7 Resigned" + (emp.resignedAt ? " " + fmtDate(emp.resignedAt) : ""));
-
-    var current = getCurrentContract(emp);
-    var sorted = (emp.contracts || []).slice().sort(function (a, b) {
-      var ta = a.startDate ? new Date(a.startDate).getTime() : -Infinity;
-      var tb = b.startDate ? new Date(b.startDate).getTime() : -Infinity;
-      return tb - ta;
-    });
-
-    if (!sorted.length) {
-      historyList.innerHTML = '<li>No contract periods on file.</li>';
-    } else {
-      historyList.innerHTML = sorted.map(function (c) {
-        var status = statusForContract(c);
-        var isCurrent = current && c === current;
-        return "<li>" +
-          "<div>" +
-            '<div class="hrange">' + fmtDate(c.startDate) + " &rarr; " + fmtDate(c.endDate) + "</div>" +
-            '<div class="hsource">' + escapeHtml(periodLabel(c)) + " \u00b7 " + (c.source === "manual" ? "Added manually" : "From import") + (c.addedAt ? " \u00b7 " + fmtDate(c.addedAt) : "") + "</div>" +
-          "</div>" +
-          '<div class="htag">' +
-            (isCurrent ? '<span class="current-tag">Current</span>' : "") +
-            '<span class="pill ' + status + '">' + statusLabel(status) + "</span>" +
-          "</div>" +
-        "</li>";
-      }).join("");
-    }
-    historyBackdrop.classList.add("open");
+    return String(excelDate);
   }
 
-  document.getElementById("historyCloseBtn").addEventListener("click", function () { historyBackdrop.classList.remove("open"); });
-  historyBackdrop.addEventListener("click", function (e) { if (e.target === historyBackdrop) historyBackdrop.classList.remove("open"); });
+  // Word Export Implementation
+  async function exportToWord() {
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, HeadingLevel, BorderStyle } = docx;
 
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") {
-      contractBackdrop.classList.remove("open");
-      historyBackdrop.classList.remove("open");
-    }
-  });
+    const dept = document.getElementById('dept-filter').value;
+    const search = document.getElementById('search-input').value.toLowerCase();
+    const showResigned = document.getElementById('show-resigned-check').checked;
 
-  // ---------- init ----------
+    // Filter data according to active UI filters
+    const filtered = employees.filter(emp => {
+      const isResigned = emp.status === 'Resigned';
+      if (!showResigned && isResigned && currentFilter !== 'resigned') return false;
 
-  loadState().then(function () {
-    document.getElementById("loadingState").style.display = "none";
-    refresh();
-  });
-})();
+      const latestContract = emp.contracts && emp.contracts.length ? emp.contracts[emp.contracts.length - 1] : {};
+      const days = getDaysRemaining(latestContract.endDate);
+
+      if (currentFilter === 'active' && (isResigned || days < 0)) return false;
+      if (currentFilter === 'critical' && (isResigned || days > 30 || days < 0)) return false;
+      if (currentFilter === 'expired' && (isResigned || days >= 0 || !latestContract.endDate)) return false;
+      if (currentFilter === 'resigned' && !isResigned) return false;
+
+      if (dept && emp.department !== dept) return false;
+      const searchStr = `${emp.payrollNo} ${emp.name} ${emp.department} ${emp.designation}`.toLowerCase();
+      if (search && !searchStr.includes(search)) return false;
+
+      return true;
+    });
+
+    // Compute Summary Numbers
+    const totalCount = filtered.length;
+    const activeCount = filtered.filter(e => e.status !== 'Resigned' && getDaysRemaining((e.contracts[e.contracts.length - 1] || {}).endDate) >= 0).length;
+    const criticalCount = filtered.filter(e => e.status !== 'Resigned' && getDaysRemaining((e.contracts[e.contracts.length - 1] || {}).endDate) <= 30 && getDaysRemaining((e.contracts[e.contracts.length - 1] || {}).endDate) >= 0).length;
+    const expiredCount = filtered.filter(e => e.status !== 'Resigned' && getDaysRemaining((e.contracts[e.contracts.length - 1] || {}).endDate) < 0).length;
+
+    // Build Word Document
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          // Header Title
+          new Paragraph({
+            text: "Majani Mingi Employees Contract Tracker",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 }
+          }),
+          new Paragraph({
+            text: `Generated on: ${new Date().toLocaleDateString()} | Filter: ${currentFilter.toUpperCase()} ${dept ? '| Dept: ' + dept : ''}`,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+          }),
+
+          // Summary Section Box
+          new Paragraph({ text: "Summary Metrics", heading: HeadingLevel.HEADING_2, spacing: { after: 100 } }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph({ text: `Total Tracked: ${totalCount}`, bold: true })] }),
+                  new TableCell({ children: [new Paragraph({ text: `Active: ${activeCount}`, bold: true })] }),
+                  new TableCell({ children: [new Paragraph({ text: `Expiring (<=30d): ${criticalCount}`, bold: true })] }),
+                  new TableCell({ children: [new Paragraph({ text: `Expired: ${expiredCount}`, bold: true })] }),
+                ]
+              })
+            ]
+          }),
+
+          new Paragraph({ text: "", spacing: { after: 300 } }),
+
+          // Employees Data Table
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              // Header Row
+              new TableRow({
+                tableHeader: true,
+                children: ["Payroll", "Employee Name", "Department", "Designation", "Start Date", "End Date", "Period", "Days Left"].map(title => 
+                  new TableCell({
+                    children: [new Paragraph({ text: title, bold: true })],
+                    shading: { fill: "0F766E" }
+                  })
+                )
+              }),
+              // Data Rows
+              ...filtered.map(emp => {
+                const latest = emp.contracts && emp.contracts.length ? emp.contracts[emp.contracts.length - 1] : {};
+                const days = getDaysRemaining(latest.endDate);
+                const daysText = emp.status === 'Resigned' ? 'Resigned' : (days !== null ? `${days} d` : '-');
+
+                return new TableRow({
+                  children: [
+                    emp.payrollNo || '-',
+                    emp.name || '-',
+                    emp.department || '-',
+                    emp.designation || '-',
+                    latest.startDate || '-',
+                    latest.endDate || '-',
+                    latest.period || '-',
+                    daysText
+                  ].map(val => new TableCell({ children: [new Paragraph({ text: String(val) })] }))
+                });
+              })
+            ]
+          })
+        ]
+      }]
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `Majani_Mingi_Contract_Report_${new Date().toISOString().split('T')[0]}.docx`);
+  }
 </script>
-
 </body>
 </html>
