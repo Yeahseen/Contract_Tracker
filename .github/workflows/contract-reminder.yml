@@ -1,0 +1,46 @@
+name: Contract reminders
+
+on:
+  schedule:
+    - cron: "0 4 * * *"      # every day at 04:00 UTC = 07:00 in Nairobi
+  workflow_dispatch:          # lets you run it by hand: GitHub > Actions > Contract reminders > Run workflow
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install
+        run: npm install --omit=dev --no-audit --no-fund
+        working-directory: notifier
+      - name: Send reminders
+        run: node notifier/send-reminders.js
+        env:
+          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          NOTIFIER_EMAIL: ${{ secrets.NOTIFIER_EMAIL }}
+          NOTIFIER_PASSWORD: ${{ secrets.NOTIFIER_PASSWORD }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+          APP_URL: ${{ secrets.APP_URL }}
+          COMPANY_NAME: Majani Mingi
+          TZ_NAME: Africa/Nairobi
+      # GitHub pauses scheduled runs in a public repository after 60 days without activity.
+      # This step asks GitHub to keep the schedule switched on. (A private repository is not affected.)
+      - name: Keep the schedule switched on
+        if: always()
+        continue-on-error: true
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/contract-reminders.yml/enable"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
