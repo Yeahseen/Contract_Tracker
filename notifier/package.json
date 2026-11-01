@@ -1,0 +1,9 @@
+{
+  "name": "contract-tracker-reminders",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily reminder emails for the contract tracker",
+  "main": "send-reminders.js",
+  "engines": { "node": ">=20" },
+  "dependencies": { "nodemailer": "^6.9.0" }
+}
