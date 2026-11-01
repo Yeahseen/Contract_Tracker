@@ -2,8 +2,8 @@ name: Contract reminders
 
 on:
   schedule:
-    - cron: "0 4 * * *"      # every day at 04:00 UTC = 07:00 in Nairobi
-  workflow_dispatch:          # lets you run it by hand: GitHub > Actions > Contract reminders > Run workflow
+    - cron: "0 4 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -36,8 +36,6 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           COMPANY_NAME: Majani Mingi
           TZ_NAME: Africa/Nairobi
-      # GitHub pauses scheduled runs in a public repository after 60 days without activity.
-      # This step asks GitHub to keep the schedule switched on. (A private repository is not affected.)
       - name: Keep the schedule switched on
         if: always()
         continue-on-error: true
