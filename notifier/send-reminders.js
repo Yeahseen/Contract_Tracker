@@ -57,7 +57,7 @@ async function main(env, deps) {
     if (!transport) {
       const nodemailer = require("nodemailer");
       const port = Number(env.SMTP_PORT || 465);
-      transport = nodemailer.createTransport({ host: env.SMTP_HOST || "smtp.gmail.com", port, secure: port === 465, auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } });
+      transport = nodemailer.createTransport({ host: env.SMTP_HOST || "smtp.gmail.com", port, secure: port === 465, requireTLS: port !== 465, auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } });
     }
     await transport.sendMail({ from: env.MAIL_FROM || env.SMTP_USER, to: recipients.join(", "), subject: mail.subject, text: mail.text, html: mail.html });
     // only after the email has really gone out do we remember it, so a failed send is retried tomorrow

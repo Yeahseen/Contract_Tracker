@@ -63,6 +63,8 @@
     sortDir: 1,
     statusFilter: "",
     deptFilter: "",
+    daysMin: null,
+    daysMax: null,
     search: "",
     showResigned: false
   };
@@ -718,13 +720,25 @@
 
   // ---------- excel parsing ----------
 
-  function normalizeHeader(h) { return String(h == null ? "" : h).trim().toLowerCase(); }
+  // Headings are compared ignoring capitals, extra spaces and punctuation, and a few common
+  // alternative names are accepted (for example "Name", "Contract End Date", "Expiry Date").
+  function normalizeHeader(h) {
+    return String(h == null ? "" : h).toLowerCase()
+      .replace(/[\u00a0\s]+/g, " ").replace(/[.:#*_\-\/()]+/g, " ").replace(/\s+/g, " ").trim();
+  }
 
-  var HEADER_MAP = {
-    "payroll no.": "payrollNo", "payroll no": "payrollNo",
-    "employee name": "name", "department": "department", "designation": "designation",
-    "start date": "startDate", "duration (months)": "durationMonths", "end date": "endDate"
+  var HEADER_SYNONYMS = {
+    payrollNo: ["payroll no", "payroll number", "payroll", "pay roll no", "payroll nos", "staff no", "staff number", "employee no", "employee number", "emp no", "pf no"],
+    name: ["employee name", "employee names", "name", "names", "employee", "full name", "full names", "staff name", "name of employee", "names of employee", "emp name"],
+    department: ["department", "dept", "department name", "section", "division"],
+    designation: ["designation", "job title", "position", "title", "job designation", "role"],
+    startDate: ["start date", "contract start", "contract start date", "date started", "commencement date", "date of commencement", "start", "engagement date", "date of engagement"],
+    durationMonths: ["duration months", "duration", "contract duration", "months"],
+    endDate: ["end date", "contract end", "contract end date", "expiry date", "expiry", "date of expiry", "end", "contract expiry", "contract expiry date", "contract expires", "end of contract"]
   };
+  var HEADER_LOOKUP = {};
+  Object.keys(HEADER_SYNONYMS).forEach(function (k) { HEADER_SYNONYMS[k].forEach(function (s) { HEADER_LOOKUP[s] = k; }); });
+  function headerKey(h) { return HEADER_LOOKUP[normalizeHeader(h)] || null; }
 
   // Columns a sheet must have before we'll import rows from it. Duration is
   // left out since the Period feature can work from start/end dates alone.
@@ -752,17 +766,34 @@
   }
 
   function findHeaderRow(sheetRows) {
-    for (var i = 0; i < sheetRows.length; i++) {
+    var limit = Math.min(sheetRows.length, 100);
+    for (var i = 0; i < limit; i++) {
       var row = sheetRows[i] || [];
       var hasName = false, hasEnd = false;
       for (var j = 0; j < row.length; j++) {
-        var h = normalizeHeader(row[j]);
-        if (h === "employee name") hasName = true;
-        if (h === "end date") hasEnd = true;
+        var k = headerKey(row[j]);
+        if (k === "name") hasName = true;
+        if (k === "endDate") hasEnd = true;
       }
       if (hasName && hasEnd) return i;
     }
     return -1;
+  }
+
+  // For the error message: the headings of the row that looks most like a heading row.
+  function describeSheetHeadings(sheetRows) {
+    var best = -1, bestScore = -1;
+    for (var i = 0; i < Math.min(sheetRows.length, 30); i++) {
+      var row = sheetRows[i] || [];
+      var seen = {}, filled = 0;
+      row.forEach(function (c) { if (c != null && String(c).trim() !== "") { filled++; var k = headerKey(c); if (k) seen[k] = true; } });
+      var score = Object.keys(seen).length * 100 + (filled > 1 ? 1 : 0);
+      if (filled && score > bestScore) { best = i; bestScore = score; }
+    }
+    if (best < 0) return "(the sheet is empty)";
+    var cells = (sheetRows[best] || []).filter(function (c) { return c != null && String(c).trim() !== ""; })
+      .slice(0, 10).map(function (c) { var s = String(c).trim(); return "\u201c" + (s.length > 24 ? s.slice(0, 24) + "\u2026" : s) + "\u201d"; });
+    return "row " + (best + 1) + " reads " + cells.join(", ");
   }
 
   function parseWorkbook(wb) {
@@ -770,20 +801,24 @@
     var order = [];
     var warnings = []; // sheets that looked like a contract register but were missing mandatory columns
     var candidateSheetCount = 0;
+    var sheetNotes = [];
 
     wb.SheetNames.forEach(function (sheetName) {
       var ws = wb.Sheets[sheetName];
       var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
       var headerIdx = findHeaderRow(rows);
-      if (headerIdx === -1) return; // doesn't even look like a contract register — skip silently
+      if (headerIdx === -1) {   // doesn't look like a contract register: remember what it does contain, for the message
+        sheetNotes.push({ sheet: sheetName, note: describeSheetHeadings(rows) });
+        return;
+      }
 
       candidateSheetCount++;
 
       var headerRow = rows[headerIdx];
       var colIndex = {};
       headerRow.forEach(function (h, idx) {
-        var key = HEADER_MAP[normalizeHeader(h)];
-        if (key) colIndex[key] = idx;
+        var key = headerKey(h);
+        if (key && colIndex[key] == null) colIndex[key] = idx;
       });
 
       var missing = MANDATORY_COLUMNS.filter(function (c) { return colIndex[c.key] == null; }).map(function (c) { return c.label; });
@@ -825,7 +860,8 @@
     return {
       entries: order.map(function (k) { return byKey[k]; }),
       warnings: warnings,
-      candidateSheetCount: candidateSheetCount
+      candidateSheetCount: candidateSheetCount,
+      sheetNotes: sheetNotes
     };
   }
 
@@ -1089,6 +1125,11 @@
     var filtered = visible.filter(function (r) {
       if (state.statusFilter && r.status !== state.statusFilter) return false;
       if (state.deptFilter && r.department !== state.deptFilter) return false;
+      if (state.daysMin !== null || state.daysMax !== null) {
+        if (r.daysRemaining == null) return false;                       // no end date, so no "days left"
+        if (state.daysMin !== null && r.daysRemaining < state.daysMin) return false;
+        if (state.daysMax !== null && r.daysRemaining > state.daysMax) return false;
+      }
       if (q) {
         var hay = (r.name + " " + r.department + " " + r.designation + " " + r.payrollNo).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
@@ -1209,7 +1250,10 @@
         var result = parseWorkbook(wb);
 
         if (result.candidateSheetCount === 0) {
-          fileError.textContent = "Couldn't find a sheet with \u201cEmployee Name\u201d and \u201cEnd Date\u201d columns. Check the workbook and try again.";
+          fileError.textContent = "Couldn't find the employee name and contract end date columns in this workbook.\n" +
+            result.sheetNotes.map(function (n) { return "\u2022 Sheet \u201c" + n.sheet + "\u201d: " + n.note; }).join("\n") +
+            "\n\nThe tracker looks (in the first 100 rows of each sheet) for a heading such as Employee Name or Name, and one such as End Date, Contract End Date or Expiry Date. " +
+            "It also needs Payroll No., Department, Designation and Start Date. Rename the headings to match and try again.";
           fileError.style.display = "block";
           return;
         }
@@ -1280,9 +1324,36 @@
 
   document.getElementById("searchInput").addEventListener("input", function (e) { state.search = e.target.value; render(); });
   document.getElementById("deptFilter").addEventListener("change", function (e) { state.deptFilter = e.target.value; render(); });
+
+  // Days-left filter: presets, or a custom range (blank = no limit; negative numbers mean already expired).
+  var daysSel = document.getElementById("daysFilter");
+  var daysFrom = document.getElementById("daysFrom");
+  var daysTo = document.getElementById("daysTo");
+  function intOrNull(v) { var n = parseInt(String(v).trim(), 10); return isNaN(n) ? null : n; }
+  function applyDaysFilter() {
+    var v = daysSel.value;
+    document.getElementById("daysCustom").style.display = v === "custom" ? "inline-flex" : "none";
+    if (!v) { state.daysMin = null; state.daysMax = null; }
+    else if (v === "expired") { state.daysMin = null; state.daysMax = -1; }
+    else if (v === "custom") { state.daysMin = intOrNull(daysFrom.value); state.daysMax = intOrNull(daysTo.value); }
+    else { state.daysMin = 0; state.daysMax = parseInt(v, 10); }
+    render();
+  }
+  function daysFilterLabel() {
+    if (state.daysMin === null && state.daysMax === null) return "";
+    if (state.daysMin === null) return state.daysMax === -1 ? "already expired" : "at most " + state.daysMax + " days left";
+    if (state.daysMax === null) return "at least " + state.daysMin + " days left";
+    return state.daysMin + " to " + state.daysMax + " days left";
+  }
+  daysSel.addEventListener("change", applyDaysFilter);
+  daysFrom.addEventListener("input", applyDaysFilter);
+  daysTo.addEventListener("input", applyDaysFilter);
   document.getElementById("showResignedToggle").addEventListener("change", function (e) { state.showResigned = e.target.checked; render(); });
   document.getElementById("clearFiltersBtn").addEventListener("click", function () {
     state.search = ""; state.deptFilter = ""; state.statusFilter = "";
+    state.daysMin = null; state.daysMax = null;
+    daysSel.value = ""; daysFrom.value = ""; daysTo.value = "";
+    document.getElementById("daysCustom").style.display = "none";
     document.getElementById("searchInput").value = "";
     render();
   });
@@ -1310,6 +1381,7 @@
     var parts = [];
     if (state.statusFilter) parts.push("Status: " + statusLabel(state.statusFilter));
     if (state.deptFilter) parts.push("Department: " + state.deptFilter);
+    if (daysFilterLabel()) parts.push("Period left: " + daysFilterLabel());
     if (state.search.trim()) parts.push('Search: "' + state.search.trim() + '"');
     parts.push(state.showResigned ? "Including resigned employees" : "Active employees only");
     return {

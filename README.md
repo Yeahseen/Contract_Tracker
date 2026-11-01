@@ -43,7 +43,10 @@ Do these in the Firebase console, in this order:
 ## 3. Reminder emails – only the admin is notified
 
 1. In the tracker: **Admin tools → Reminder emails.** Tick *Send reminder emails*, enter the admin's email address(es), the days to warn at (default `60, 30, 14`), your site's address, and **Save**.
-2. Create an **app password** for the mailbox that will send the emails (for Gmail: Google Account → Security → turn on 2-Step Verification → *App passwords*).
+2. Choose the mailbox that will **send** the emails. It can be a different mailbox from the admin's inbox that receives them.
+   * **Recommended: a free Gmail account used only for this.** Turn on 2-Step Verification, then create an app password at `myaccount.google.com/apppasswords` (16 characters, enter it without spaces). Use the Gmail address as `SMTP_USER` and the code as `SMTP_PASS`. The reminders can still go to an Outlook address.
+   * **Microsoft 365 work or school mailbox:** works only if your IT administrator has switched on *Authenticated SMTP* for that mailbox (and allows app passwords if you use multi-factor sign-in). Set `SMTP_HOST` = `smtp.office365.com` and `SMTP_PORT` = `587`. Microsoft is phasing this method out (the date has been pushed to 2027 or later), so it may stop working.
+   * **Personal Outlook.com / Hotmail / Live:** app passwords no longer work for sending. Use the Gmail option above.
 3. In GitHub: **Settings → Secrets and variables → Actions → New repository secret.** Add:
 
    | Secret | Value |
@@ -63,6 +66,7 @@ Do these in the Firebase console, in this order:
 
 ## 4. Everyday use
 
+* **Filter by days left:** the *Any days left* menu above the table narrows the list (already expired, ending within 7/14/30/60/90 days, or a custom range). *Export to Word* and *Export to PDF* contain exactly what you see.
 * **Needs attention** (top of the page, admins only) lists contracts expiring soon. Set the renewal stage right there.
 * **Backup:** *Admin tools → Download backup*, once a month is a good habit. *Restore from backup* puts a backup back.
 * **Activity log:** *Admin tools → View activity log* shows who changed what and when.

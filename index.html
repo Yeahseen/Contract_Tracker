@@ -114,6 +114,22 @@
     <div class="toolbar">
       <input type="search" id="searchInput" placeholder="Search name, department, payroll no.&hellip;">
       <select id="deptFilter"><option value="">All departments</option></select>
+      <select id="daysFilter" aria-label="Days left on the contract">
+        <option value="">Any days left</option>
+        <option value="expired">Already expired</option>
+        <option value="7">Ending within 7 days</option>
+        <option value="14">Ending within 14 days</option>
+        <option value="30">Ending within 30 days</option>
+        <option value="60">Ending within 60 days</option>
+        <option value="90">Ending within 90 days</option>
+        <option value="custom">Custom range…</option>
+      </select>
+      <span id="daysCustom" class="days-custom" style="display:none;">
+        <input type="number" id="daysFrom" placeholder="from" aria-label="Days left from">
+        <span>to</span>
+        <input type="number" id="daysTo" placeholder="to" aria-label="Days left to">
+        <span>days left (use a negative number for expired)</span>
+      </span>
       <button class="btn secondary" id="clearFiltersBtn" type="button">Clear filters</button>
       <select id="mobileSort" class="mobile-only" aria-label="Sort by">
         <option value="daysRemaining|asc">Sort: soonest to expire</option>

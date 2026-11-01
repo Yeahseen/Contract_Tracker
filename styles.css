@@ -265,3 +265,8 @@
   tbody tr.empty-row td::before { content: none; }
   .toolbar input[type="search"], .toolbar select { flex: 1 1 100%; }
 }
+
+/* ---- days-left filter ---- */
+.days-custom { align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap; }
+.days-custom input { width: 5.2rem; font-family: var(--font-ui); font-size: 0.88rem; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); color: var(--text); }
+.file-error { white-space: pre-line; }
