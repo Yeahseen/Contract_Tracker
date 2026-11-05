@@ -5,6 +5,7 @@
 | File | What it is |
 |---|---|
 | `index.html`, `app.js`, `styles.css`, `vendor/` | The tracker itself. You never edit these. |
+| `attendance.js`, `attendance.css`, `vendor/exceljs.min.js` | The admin-only **Attendance** tab (biometric report generator). Nothing is stored. |
 | `config.js` | **The only file you edit.** Your Firebase address, key and admin emails. |
 | `notifier/` + `.github/workflows/contract-reminders.yml` | The daily reminder-email job (runs free on GitHub). |
 
@@ -80,3 +81,10 @@ Do these in the Firebase console, in this order:
 * The data is personal data about employees. Keep the number of admin and viewer accounts small, and remove accounts when people leave.
 * Reminders are by email only. Days are counted on the Nairobi calendar.
 * If you leave the three Firebase values in `config.js` empty, the tracker works in a single browser with the simple local passwords from `config.js`.
+
+
+## Attendance tab (admin only)
+
+Open the **Attendance** tab, add the biometric punch exports and (optionally) the leave records, and pick the employee and month. Files are read in the browser and nothing is saved or sent anywhere. **Download Excel** gives one workbook with a sheet per month. Employees are matched to the tracker by payroll number = biometric ID.
+
+Holidays: Kenyan public holidays are built in (fixed dates, Good Friday, Easter Monday, the Sunday-to-Monday rule, and the Idd and one-off dates for 2025 and 2026). Idd-ul-Fitr and Idd-ul-Azha follow the moon and are gazetted each year, so add other years' dates as custom holidays on the Attendance tab. Custom holidays are stored in the browser only.

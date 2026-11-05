@@ -711,7 +711,11 @@
     document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") pollOnce(); });
     window.addEventListener("online", pollOnce);
   }
-  window.__contractTracker = { poll: pollOnce };
+  window.__contractTracker = {
+    poll: pollOnce,
+    // Read-only list used by the Attendance tab to match biometric IDs to payroll numbers.
+    employees: function () { return state.employees.map(function (e) { return { payrollNo: e.payrollNo, name: e.name, department: e.department }; }); }
+  };
 
   function makeId(payrollNo, name) {
     if (payrollNo != null && String(payrollNo).trim() !== "") return "p:" + String(payrollNo).trim();

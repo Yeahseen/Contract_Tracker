@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="attendance.css">
 </head>
 <body>
 <div class="modal-backdrop open" id="loginGate" style="z-index:100;">
@@ -51,6 +52,13 @@
 </header>
 
 <main class="wrap">
+
+  <nav class="view-tabs">
+    <button type="button" class="vtab act" id="tabContracts">Contracts</button>
+    <button type="button" class="vtab admin-only" id="tabAttendance">Attendance</button>
+  </nav>
+
+  <div id="contractsView">
 
   <section class="dropzone" id="loadingState">
     <h2>Loading&hellip;</h2>
@@ -161,6 +169,35 @@
         </thead>
         <tbody id="tableBody"></tbody>
       </table>
+    </div>
+  </section>
+
+  </div><!-- /#contractsView -->
+
+  <section id="attendanceView" class="admin-only">
+    <div class="att-card">
+      <h3 style="margin:0 0 .3rem;font-family:var(--font-display)">Biometric attendance report</h3>
+      <p class="modal-sub" style="margin:0 0 .8rem">Add the biometric punch exports and, if you have them, the leave records. A report is built for every month found. Files are read in your browser and nothing is saved.</p>
+      <div class="att-drop" id="attDrop">Click or drop files here (.xls or .xlsx), as many as you like<input id="attFile" type="file" multiple accept=".xls,.xlsx" hidden></div>
+      <div class="att-files" id="attFiles"></div>
+      <div class="att-msg" id="attMsg"></div>
+    </div>
+    <div class="att-card">
+      <h4 style="margin:0 0 .5rem;font-family:var(--font-display);font-size:1.05rem">Holidays</h4>
+      <label class="att-check"><input type="checkbox" id="attKe" checked> Include Kenyan public holidays (fixed dates, Good Friday, Easter Monday, Sunday-to-Monday rule, and the Idd and one-off dates built in for 2025 and 2026)</label>
+      <p class="att-msg">Idd-ul-Fitr and Idd-ul-Azha follow the moon and are gazetted each year, so add them below for other years. Custom holidays are kept in this browser only.</p>
+      <div class="att-row"><input type="date" id="attHDate" aria-label="Holiday date"><input type="text" id="attHName" placeholder="Holiday name, e.g. Company day" aria-label="Holiday name"><button class="btn small secondary" id="attHAdd" type="button">Add holiday</button></div>
+      <div class="att-files" id="attHList"></div>
+    </div>
+    <div class="att-card" id="attOut" style="display:none">
+      <div class="att-row">
+        <label>Employee <select id="attEmp"></select></label>
+        <label>Rest days <select id="attRest"><option value="0">Sunday only</option><option value="1">Saturday &amp; Sunday</option></select></label>
+        <button class="btn small" id="attDl" type="button">Download Excel (all months)</button>
+      </div>
+      <div class="att-tabs" id="attTabs"></div>
+      <div id="attRep"></div>
+      <p class="att-msg">Punch dates are read as MM/DD/YYYY. Hours show only when a day has two scans more than 5 minutes apart; no break is deducted and nothing is estimated. Employees are matched to the tracker by payroll number = biometric ID.</p>
     </div>
   </section>
 
@@ -410,6 +447,8 @@
 <script src="config.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/docx.iife.js"></script>
+<script src="vendor/exceljs.min.js"></script>
 <script src="app.js"></script>
+<script src="attendance.js"></script>
 </body>
 </html>
