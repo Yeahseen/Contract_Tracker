@@ -31,3 +31,11 @@
 @media print{.view-tabs{display:none}}
 .att-row input{font-family:var(--font-ui);font-size:.88rem;padding:.5rem .7rem;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text)}
 .att-check{font-size:.85rem;display:flex;gap:.5rem;align-items:flex-start}
+.att-reg{min-width:0;font-size:.74rem}
+.att-reg th,.att-reg td{padding:.25rem .15rem;min-width:26px}
+.att-reg th.nm,.att-reg td.nm{position:sticky;left:0;background:var(--surface);color:var(--text);text-align:left;min-width:150px;padding-left:.5rem;z-index:1}
+.att-reg th.nm{background:var(--ink);color:#fff}
+.att-reg th small{font-weight:400;opacity:.8}.att-reg th.sun{opacity:.75}
+.att-reg td.nr{background:var(--att-nr)}.att-reg td.lv{background:var(--att-lv)}.att-reg td.hol{background:var(--att-hol)}.att-reg td.rest{background:var(--neutral-bg)}
+.att-reg .tt{min-width:46px;font-weight:600}.att-reg td.nm small{color:var(--text-muted)}
+.att-link{border:0;background:none;color:var(--ink);font:inherit;font-weight:600;cursor:pointer;padding:0;text-align:left;text-decoration:underline}

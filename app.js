@@ -946,8 +946,9 @@
       created = true;
     }
 
-    if (entry.department) emp.department = entry.department;
-    if (entry.designation) emp.designation = entry.designation;
+    var mf = emp.manualFields || {};
+    if (entry.department && !mf.department) emp.department = entry.department;
+    if (entry.designation && !mf.designation) emp.designation = entry.designation;
     if (entry.payrollNo) emp.payrollNo = entry.payrollNo;
 
     var hasDates = !!(entry.startDate || entry.endDate);
@@ -1816,6 +1817,85 @@
   document.getElementById("historyCloseBtn").addEventListener("click", function () { historyBackdrop.classList.remove("open"); });
   historyBackdrop.addEventListener("click", function (e) { if (e.target === historyBackdrop) historyBackdrop.classList.remove("open"); });
 
+  // ---------- edit employee details (name, department, designation) ----------
+
+  var detailsBackdrop = document.getElementById("detailsModalBackdrop");
+  var detailsForm = document.getElementById("detailsForm");
+  var detailsError = document.getElementById("detailsError");
+  var d_name = document.getElementById("d_name");
+  var d_department = document.getElementById("d_department");
+  var d_designation = document.getElementById("d_designation");
+  var detailsTargetId = null;
+
+  function fillDatalist(id, key) {
+    var seen = {};
+    var vals = state.employees.map(function (e) { return (e[key] || "").trim(); }).filter(function (v) { if (!v || seen[v.toLowerCase()]) return false; seen[v.toLowerCase()] = 1; return true; }).sort();
+    document.getElementById(id).innerHTML = vals.map(function (v) { return '<option value="' + escapeHtml(v) + '"></option>'; }).join("");
+  }
+
+  function openDetailsModal(emp) {
+    detailsTargetId = emp.id;
+    detailsError.style.display = "none";
+    document.getElementById("detailsSub").textContent = (emp.payrollNo ? "Payroll No. " + emp.payrollNo : "No payroll number") + " \u00b7 contract history stays attached to this employee.";
+    d_name.value = emp.name || "";
+    d_department.value = emp.department || "";
+    d_designation.value = emp.designation || "";
+    fillDatalist("d_deptList", "department");
+    fillDatalist("d_desList", "designation");
+    historyBackdrop.classList.remove("open");
+    detailsBackdrop.classList.add("open");
+    d_name.focus();
+  }
+  function closeDetailsModal(reopen) {
+    detailsBackdrop.classList.remove("open");
+    var emp = state.employees.filter(function (x) { return x.id === detailsTargetId; })[0];
+    detailsTargetId = null;
+    if (reopen && emp) openHistory(emp);
+  }
+  document.getElementById("historyEditBtn").addEventListener("click", function () {
+    if (!isAdmin() || !historyTargetEmp) return;
+    openDetailsModal(historyTargetEmp);
+  });
+  document.getElementById("detailsCancelBtn").addEventListener("click", function () { closeDetailsModal(true); });
+  detailsBackdrop.addEventListener("click", function (e) { if (e.target === detailsBackdrop) closeDetailsModal(true); });
+
+  detailsForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!isAdmin() || !detailsTargetId) return;
+    function fail(msg) { detailsError.textContent = msg; detailsError.style.display = "block"; }
+    var emp = state.employees.filter(function (x) { return x.id === detailsTargetId; })[0];
+    if (!emp) { closeDetailsModal(false); return; }
+    var name = d_name.value.replace(/\s+/g, " ").trim();
+    var dept = d_department.value.trim();
+    var des = d_designation.value.trim();
+    if (!name) { fail("Employee name is required."); return; }
+    var nk = nameKey(name);
+    var clash = state.employees.filter(function (x) {
+      return x.id !== emp.id && nameKey(x.name) === nk && (!x.payrollNo || !emp.payrollNo || x.payrollNo === emp.payrollNo);
+    })[0];
+    if (clash) { fail("Another employee is already named \u201c" + clash.name + "\u201d. Use a different spelling or fix that record first."); return; }
+
+    var changes = [];
+    if (name !== emp.name) changes.push("Name: " + emp.name + " \u2192 " + name);
+    if (dept !== (emp.department || "")) changes.push("Department: " + (emp.department || "\u2014") + " \u2192 " + (dept || "\u2014"));
+    if (des !== (emp.designation || "")) changes.push("Designation: " + (emp.designation || "\u2014") + " \u2192 " + (des || "\u2014"));
+    if (!changes.length) { closeDetailsModal(true); showToast("No changes to save.", "info"); return; }
+
+    emp.manualFields = emp.manualFields || {};
+    if (dept !== (emp.department || "")) emp.manualFields.department = true;
+    if (des !== (emp.designation || "")) emp.manualFields.designation = true;
+    emp.name = name;
+    emp.department = dept;
+    emp.designation = des;
+    emp.detailsEditedAt = new Date().toISOString();
+    emp.detailsEditedBy = currentUserLabel();
+    logAction("edit-employee", emp, changes.join("; "));
+    saveState();
+    closeDetailsModal(true);
+    refresh();
+    showToast("Employee details updated.", "info");
+  });
+
   // ---------- edit one contract period ----------
 
   var editBackdrop = document.getElementById("editModalBackdrop");
@@ -2210,7 +2290,7 @@
   // ----- activity log -----
   var logBackdrop = document.getElementById("logModalBackdrop");
   var LOG_LABELS = {
-    "import": "Import", "add-contract": "Contract added", "add-employee": "Employee added", "edit-contract": "Contract edited",
+    "import": "Import", "add-contract": "Contract added", "add-employee": "Employee added", "edit-contract": "Contract edited", "edit-employee": "Details edited",
     "delete-contract": "Contract deleted", "restore-contract": "Contract restored", "resign": "Resigned", "reactivate": "Reactivated",
     "renewal": "Renewal stage", "settings": "Settings", "backup": "Backup", "restore": "Restore"
   };

@@ -88,3 +88,10 @@ Do these in the Firebase console, in this order:
 Open the **Attendance** tab, add the biometric punch exports and (optionally) the leave records, and pick the employee and month. Files are read in the browser and nothing is saved or sent anywhere. **Download Excel** gives one workbook with a sheet per month. Employees are matched to the tracker by payroll number = biometric ID.
 
 Holidays: Kenyan public holidays are built in (fixed dates, Good Friday, Easter Monday, the Sunday-to-Monday rule, and the Idd and one-off dates for 2025 and 2026). Idd-ul-Fitr and Idd-ul-Azha follow the moon and are gazetted each year, so add other years' dates as custom holidays on the Attendance tab. Custom holidays are stored in the browser only.
+
+
+## Editing employee details (admin only)
+
+Open an employee's **History**, then **Edit details** to change the name, department and designation. Contract periods and history stay attached. Changes are written to the Activity log ("Details edited"). Department and designation you edit by hand are kept when a new spreadsheet is imported.
+
+Department view: on the Attendance tab set **View** to Department to see an attendance register (employees down, days across) for one department or everyone, with P / leave codes / H / R / no-record cells and per-employee totals. Tap a name to open that employee's full report. **Download Excel** then includes a register sheet per month plus the individual sheets. Departments come from the tracker (payroll number = biometric ID) or the leave file.

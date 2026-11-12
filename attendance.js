@@ -2,7 +2,7 @@
   "use strict";
   var MON = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   var DAY = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  var files = [], cur = { emp: null, ym: null };
+  var files = [], cur = { emp: null, ym: null, view: "one", dept: "__all" };
   var $ = function (s) { return document.querySelector(s); };
 
   function isAdminNow() { var r = document.getElementById("roleLabel"); return !!r && r.textContent === "Admin"; }
@@ -39,7 +39,7 @@
       return { name: name, type: "punch", rows: out };
     }
     if ("Attendance Date" in h) {
-      rows.forEach(function (r) { var d = toDate(r["Attendance Date"]); if (d) out.push({ id: normId(r["Employee"] || r["Emp ID"] || ""), name: String(r["Employee Name"] || ""), dt: d, type: String(r["Leave Type"] || "Leave") }); });
+      rows.forEach(function (r) { var d = toDate(r["Attendance Date"]); if (d) out.push({ id: normId(r["Employee"] || r["Emp ID"] || ""), name: String(r["Employee Name"] || ""), dt: d, type: String(r["Leave Type"] || "Leave"), dept: String(r["Department"] || "") }); });
       return { name: name, type: "leave", rows: out };
     }
     return { name: name, type: "unknown", rows: [] };
@@ -101,6 +101,7 @@
     all("punch").concat(all("leave")).forEach(function (r) {
       var e = m[r.id] || (m[r.id] = { id: r.id, name: "", dept: "" });
       if (r.name.length > e.name.length) e.name = r.name;
+      if (r.dept && !e.dept) e.dept = r.dept;
     });
     Object.keys(m).forEach(function (k) { var t = tm_[k]; if (t) { m[k].name = t.name || m[k].name; m[k].dept = t.department || ""; m[k].linked = true; } });
     return Object.keys(m).map(function (k) { return m[k]; });
@@ -135,10 +136,104 @@
     return { y: y, m: m, days: days, sum: sum };
   }
 
+  // ----- Department view -----
+  function deptOf(e) { return e.dept || "Unassigned"; }
+  function byName(a, b) { return (a.name || "").toLowerCase() < (b.name || "").toLowerCase() ? -1 : 1; }
+  function groupEmps(emps) {
+    return emps.filter(function (e) { return cur.dept === "__all" || deptOf(e) === cur.dept; }).sort(byName);
+  }
+  function groupMonths(grp) {
+    var s = {}; grp.forEach(function (e) { months(e.id).forEach(function (k) { s[k] = 1; }); });
+    return Object.keys(s).sort(function (a, b) { var x = a.split("-"), y = b.split("-"); return (x[0] - y[0]) || (x[1] - y[1]); });
+  }
+  function leaveCode(t) {
+    var s = String(t).toLowerCase();
+    if (/half pay/.test(s)) return "SH";
+    if (/sick/.test(s)) return "SL";
+    if (/annual/.test(s)) return "AL";
+    if (/matern/.test(s)) return "ML";
+    if (/patern/.test(s)) return "PL";
+    if (/compass|bereave/.test(s)) return "CL";
+    return (String(t).match(/\b\w/g) || ["L"]).slice(0, 2).join("").toUpperCase();
+  }
+  function cellOf(d) {
+    if (d.cnt > 0 && d.leave) return { c: "P!", cls: "", t: "Punch and a leave record on the same day" };
+    if (d.cnt > 0) return { c: d.hol ? "PH" : "P", cls: "", t: d.hol ? "Worked on " + d.hol : "Present" };
+    if (d.leave) return { c: leaveCode(d.leave), cls: "lv", t: d.leave };
+    if (d.cls === "rest") return { c: "R", cls: "rest", t: "Rest day" };
+    if (d.cls === "hol") return { c: "H", cls: "hol", t: d.hol };
+    return { c: "\u2013", cls: "nr", t: "No record" };
+  }
+  function leaveTotal(s) { var t = 0; Object.keys(s.leave).forEach(function (k) { t += s.leave[k]; }); return t; }
+  function legendCodes(rows) {
+    var m = {}; rows.forEach(function (r) { r.b.days.forEach(function (d) { if (d.leave) m[leaveCode(d.leave)] = d.leave; }); });
+    return m;
+  }
+
+  function renderDept(emps) {
+    var grp = groupEmps(emps), ms = groupMonths(grp);
+    if (ms.indexOf(cur.ym) < 0) cur.ym = ms[0];
+    $("#attTabs").innerHTML = ms.map(function (k) { var a = k.split("-"); return '<button type="button" class="' + (k === cur.ym ? "act" : "") + '" data-k="' + k + '">' + MON[a[1] - 1].slice(0, 3) + " " + a[0] + "</button>"; }).join("");
+    var rows = grp.map(function (e) { return { e: e, b: build(e.id, cur.ym) }; });
+    var b0 = rows[0].b, n = b0.days.length, tot = { p: 0, l: 0, nr: 0 };
+    rows.forEach(function (r) { tot.p += r.b.sum.present; tot.l += leaveTotal(r.b.sum); tot.nr += r.b.sum.none; });
+    var label = cur.dept === "__all" ? "All employees" : cur.dept;
+    var h = '<h3 style="margin:1rem 0 0;font-family:var(--font-display)">' + esc(label) + " \u2013 " + MON[b0.m] + " " + b0.y + "</h3>";
+    h += '<div class="att-sum"><div><b>' + rows.length + "</b><small>Employees</small></div><div><b>" + tot.p + "</b><small>Days present</small></div><div><b>" + tot.l + "</b><small>Leave days</small></div><div><b>" + tot.nr + "</b><small>No-record days</small></div></div>";
+    var lc = legendCodes(rows), lk = Object.keys(lc).sort();
+    h += '<div class="att-key">P present \u00b7 PH worked on a holiday \u00b7 H public holiday \u00b7 R rest day \u00b7 \u2013 no record' + lk.map(function (k) { return " \u00b7 " + k + " " + esc(lc[k]); }).join("") + ". Tap a name for that employee\u2019s full report.</div>";
+    h += '<div class="table-wrap"><table class="att-table att-reg"><thead><tr><th class="nm">Employee</th>';
+    b0.days.forEach(function (d) { h += '<th class="dy' + (d.dow === "Sun" ? " sun" : "") + '">' + d.date.getDate() + "<br><small>" + d.dow.charAt(0) + "</small></th>"; });
+    h += '<th class="tt">Present</th><th class="tt">Leave</th><th class="tt">No rec.</th><th class="tt">Hours</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      h += '<tr><td class="nm"><button type="button" class="att-link" data-emp="' + esc(r.e.id) + '">' + esc(r.e.name || "Employee") + "</button><small> " + esc(r.e.id) + "</small></td>";
+      r.b.days.forEach(function (d) { var c = cellOf(d); h += '<td class="' + c.cls + '" title="' + esc(c.t) + '">' + esc(c.c) + "</td>"; });
+      h += '<td class="tt">' + r.b.sum.present + '</td><td class="tt">' + leaveTotal(r.b.sum) + '</td><td class="tt">' + r.b.sum.none + '</td><td class="tt">' + (r.b.sum.hours ? r.b.sum.hours.toFixed(1) : "") + "</td></tr>";
+    });
+    $("#attRep").innerHTML = h + "</tbody></table></div>";
+  }
+
+  function addRegister(wb, grp, ym, label) {
+    var rows = grp.map(function (e) { return { e: e, b: build(e.id, ym) }; }), b0 = rows[0].b, n = b0.days.length;
+    var ws = wb.addWorksheet(("Register " + MON[b0.m].slice(0, 3) + " " + b0.y).slice(0, 31));
+    ws.addRow(["ATTENDANCE REGISTER \u2013 " + label.toUpperCase() + " \u2013 " + MON[b0.m].toUpperCase() + " " + b0.y]).font = { bold: true, size: 14, color: { argb: "FF16233F" } };
+    ws.addRow([]);
+    var hr = ws.addRow(["Employee", "ID"].concat(b0.days.map(function (d) { return d.date.getDate(); }), ["Present", "Leave", "No record", "Hours"]));
+    var hr2 = ws.addRow(["", ""].concat(b0.days.map(function (d) { return d.dow.charAt(0); }), ["", "", "", ""]));
+    [hr, hr2].forEach(function (r) { r.eachCell({ includeEmpty: true }, function (c) { c.font = { bold: true, color: { argb: "FFFFFFFF" } }; c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF16233F" } }; c.alignment = { horizontal: "center" }; }); });
+    var fills = { nr: "FFF8CBAD", lv: "FFDBEAFE", hol: "FFE2F0D9", rest: "FFE9ECEF" };
+    rows.forEach(function (r) {
+      var cells = r.b.days.map(function (d) { return cellOf(d); });
+      var row = ws.addRow([r.e.name, r.e.id].concat(cells.map(function (c) { return c.c; }), [r.b.sum.present, leaveTotal(r.b.sum), r.b.sum.none, r.b.sum.hours ? +r.b.sum.hours.toFixed(2) : ""]));
+      cells.forEach(function (c, i) { var cell = row.getCell(3 + i); cell.alignment = { horizontal: "center" }; if (fills[c.cls]) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fills[c.cls] } }; });
+      for (var k = 0; k < 4; k++) row.getCell(3 + n + k).alignment = { horizontal: "center" };
+    });
+    ws.addRow([]);
+    var lc = legendCodes(rows), txt = "P present, PH worked on a holiday, H public holiday, R rest day, \u2013 no record" + Object.keys(lc).sort().map(function (k) { return ", " + k + " " + lc[k]; }).join("");
+    ws.addRow([txt]).font = { italic: true, size: 9 };
+    ws.getColumn(1).width = 30; ws.getColumn(2).width = 8;
+    for (var i = 0; i < n; i++) ws.getColumn(3 + i).width = 4.2;
+    for (var j = 0; j < 4; j++) ws.getColumn(3 + n + j).width = 10;
+    ws.views = [{ state: "frozen", xSplit: 2, ySplit: 4 }];
+  }
+
   function render() {
     var emps = employees(), box = $("#attOut");
     if (!emps.length) { box.style.display = "none"; return; }
     box.style.display = "";
+    var dv = cur.view === "dept";
+    $("#attView").value = cur.view;
+    $("#attEmpWrap").style.display = dv ? "none" : "";
+    $("#attDeptWrap").style.display = dv ? "" : "none";
+    var dset = {}; emps.forEach(function (e) { dset[deptOf(e)] = 1; });
+    var dnames = Object.keys(dset).sort();
+    if (cur.dept !== "__all" && !dset[cur.dept]) cur.dept = "__all";
+    $("#attDept").innerHTML = '<option value="__all">All employees (' + emps.length + ')</option>' + dnames.map(function (n) {
+      var c = emps.filter(function (e) { return deptOf(e) === n; }).length;
+      return '<option value="' + esc(n) + '">' + esc(n) + " (" + c + ")</option>";
+    }).join("");
+    $("#attDept").value = cur.dept;
+    if (dv) { renderDept(emps); return; }
     var sel = $("#attEmp"), old = cur.emp;
     sel.innerHTML = emps.map(function (e) { return '<option value="' + esc(e.id) + '">' + esc(e.name || "Employee") + " (ID " + esc(e.id) + ")</option>"; }).join("");
     cur.emp = emps.some(function (e) { return e.id === old; }) ? old : emps[0].id; sel.value = cur.emp;
@@ -182,7 +277,8 @@
   }
 
   function exportAll() {
-    var wb = new ExcelJS.Workbook(), emps = employees();
+    var wb = new ExcelJS.Workbook(), dv = cur.view === "dept", emps = dv ? groupEmps(employees()) : employees();
+    if (dv && emps.length) { var lab = cur.dept === "__all" ? "All employees" : cur.dept; groupMonths(emps).forEach(function (ym) { addRegister(wb, emps, ym, lab); }); }
     emps.forEach(function (e) {
       months(e.id).forEach(function (ym) {
         var b = build(e.id, ym), nm = MON[b.m] + " " + b.y; if (emps.length > 1) nm = e.id + " " + nm;
@@ -209,7 +305,7 @@
     });
     return wb.xlsx.writeBuffer().then(function (buf) {
       var blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "Biometric_Attendance_Report.xlsx";
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = dv ? "Attendance_Register_" + (cur.dept === "__all" ? "All" : cur.dept).replace(/[^A-Za-z0-9]+/g, "_") + ".xlsx" : "Biometric_Attendance_Report.xlsx";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
     });
   }
@@ -250,6 +346,9 @@
     $("#attFiles").addEventListener("click", function (e) { var i = e.target.getAttribute("data-i"); if (i !== null) { files.splice(+i, 1); renderFiles(); } });
     $("#attTabs").addEventListener("click", function (e) { var k = e.target.getAttribute("data-k"); if (k) { cur.ym = k; render(); } });
     $("#attEmp").addEventListener("change", function () { cur.emp = this.value; render(); });
+    $("#attView").addEventListener("change", function () { cur.view = this.value; render(); });
+    $("#attDept").addEventListener("change", function () { cur.dept = this.value; render(); });
+    $("#attRep").addEventListener("click", function (e) { var id = e.target.getAttribute("data-emp"); if (id) { cur.view = "one"; cur.emp = id; render(); } });
     $("#attRest").addEventListener("change", render);
     $("#attDl").addEventListener("click", function () {
       exportAll().catch(function () { $("#attMsg").innerHTML = '<span class="err">Could not create the Excel file.</span>'; });

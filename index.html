@@ -191,13 +191,15 @@
     </div>
     <div class="att-card" id="attOut" style="display:none">
       <div class="att-row">
-        <label>Employee <select id="attEmp"></select></label>
+        <label>View <select id="attView"><option value="one">Individual</option><option value="dept">Department</option></select></label>
+        <label id="attEmpWrap">Employee <select id="attEmp"></select></label>
+        <label id="attDeptWrap" style="display:none">Department <select id="attDept"></select></label>
         <label>Rest days <select id="attRest"><option value="0">Sunday only</option><option value="1">Saturday &amp; Sunday</option></select></label>
         <button class="btn small" id="attDl" type="button">Download Excel (all months)</button>
       </div>
       <div class="att-tabs" id="attTabs"></div>
       <div id="attRep"></div>
-      <p class="att-msg">Punch dates are read as MM/DD/YYYY. Hours show only when a day has two scans more than 5 minutes apart; no break is deducted and nothing is estimated. Employees are matched to the tracker by payroll number = biometric ID.</p>
+      <p class="att-msg">Punch dates are read as MM/DD/YYYY. Hours show only when a day has two scans more than 5 minutes apart; no break is deducted and nothing is estimated. Employees are matched to the tracker by payroll number = biometric ID. Departments come from the tracker, or from the leave file when there is no match; anyone else is listed as Unassigned.</p>
     </div>
   </section>
 
@@ -282,6 +284,7 @@
     <ul class="history-list" id="historyList"></ul>
     <div class="modal-actions">
       <button type="button" class="btn secondary" id="historyCloseBtn">Close</button>
+      <button type="button" class="btn secondary admin-only" id="historyEditBtn">Edit details</button>
       <button type="button" class="btn secondary admin-only" id="historyAddBtn">Add contract period</button>
       <button type="button" class="btn" id="historyPrintBtn">Print history</button>
     </div>
@@ -307,6 +310,38 @@
       <button type="button" class="btn secondary" id="resignCancelBtn">Cancel</button>
       <button type="button" class="btn danger" id="resignConfirmBtn">Confirm resignation</button>
     </div>
+  </div>
+</div>
+
+<!-- Edit employee details -->
+<div class="modal-backdrop" id="detailsModalBackdrop">
+  <div class="modal">
+    <h3>Edit employee details</h3>
+    <p class="modal-sub" id="detailsSub"></p>
+    <div class="form-error" id="detailsError"></div>
+    <form id="detailsForm">
+      <div class="field">
+        <label for="d_name">Employee name</label>
+        <input type="text" id="d_name" required autocomplete="off">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="d_department">Department</label>
+          <input type="text" id="d_department" list="d_deptList" autocomplete="off">
+          <datalist id="d_deptList"></datalist>
+        </div>
+        <div class="field">
+          <label for="d_designation">Designation</label>
+          <input type="text" id="d_designation" list="d_desList" autocomplete="off">
+          <datalist id="d_desList"></datalist>
+        </div>
+      </div>
+      <p class="field-note">Contract dates are not changed here. Details you edit are kept when a new spreadsheet is imported.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" id="detailsCancelBtn">Cancel</button>
+        <button type="submit" class="btn">Save details</button>
+      </div>
+    </form>
   </div>
 </div>
 
